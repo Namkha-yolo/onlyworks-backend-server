@@ -53,20 +53,23 @@ async function handleElectronCallback(req, res) {
     }
 
     // Exchange authorization code for session with Supabase
-    // Use PKCE if code_verifier is provided, otherwise use standard flow
-    let authData;
+    console.log('[Auth Callback] Attempting code exchange with service role...');
 
-    if (code_verifier) {
-      console.log('[Auth Callback] Using PKCE flow with code verifier');
-      // PKCE flow
-      authData = await supabase.auth.exchangeCodeForSession(code);
+    let data, error;
+
+    // Try admin API first if available
+    if (supabase.auth.admin && supabase.auth.admin.exchangeCodeForSession) {
+      console.log('[Auth Callback] Using admin API for code exchange');
+      const adminResult = await supabase.auth.admin.exchangeCodeForSession(code);
+      data = adminResult.data;
+      error = adminResult.error;
     } else {
-      console.log('[Auth Callback] Using standard flow without code verifier');
-      // Standard flow
-      authData = await supabase.auth.exchangeCodeForSession(code);
+      // Fallback to regular API (will likely fail due to PKCE)
+      console.log('[Auth Callback] Using regular API for code exchange');
+      const regularResult = await supabase.auth.exchangeCodeForSession(code);
+      data = regularResult.data;
+      error = regularResult.error;
     }
-
-    const { data, error } = authData;
 
     if (error) {
       console.error('Supabase auth error:', error);
