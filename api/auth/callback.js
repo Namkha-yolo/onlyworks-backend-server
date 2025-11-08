@@ -40,16 +40,9 @@ async function handleElectronCallback(req, res) {
       });
     }
 
-    // For PKCE flow, we need to generate a code verifier and use it
-    // Since we can't store state between init and callback due to deployment limitations,
-    // let's use a fixed code verifier for now (not secure for production)
-    const codeVerifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
-
     // Exchange authorization code for session with Supabase
-    const { data, error } = await supabase.auth.exchangeCodeForSession({
-      authCode: code,
-      codeVerifier: codeVerifier
-    });
+    // The exchangeCodeForSession method expects just the code string
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
       console.error('Supabase auth error:', error);
