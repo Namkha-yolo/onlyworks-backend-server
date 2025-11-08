@@ -30,19 +30,14 @@ module.exports = async function handler(req, res) {
       process.env.SUPABASE_ANON_KEY
     );
 
-    // Fixed PKCE parameters for simplicity (not secure for production)
-    const codeChallenge = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
-
-    // Get OAuth URL from Supabase Auth
+    // Get OAuth URL from Supabase Auth without PKCE
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `https://onlyworks-backend-server.vercel.app/api/auth/callback`,
         queryParams: {
           access_type: 'offline',
-          prompt: 'consent',
-          code_challenge: codeChallenge,
-          code_challenge_method: 'S256'
+          prompt: 'consent'
         },
       },
     });
