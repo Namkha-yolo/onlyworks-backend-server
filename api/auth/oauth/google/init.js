@@ -30,10 +30,11 @@ module.exports = async function handler(req, res) {
       process.env.SUPABASE_ANON_KEY
     );
 
-    // Get OAuth URL from Supabase Auth without PKCE
+    // Get OAuth URL from Supabase Auth without automatic PKCE
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
+        skipBrowserRedirect: true,
         redirectTo: `https://onlyworks-backend-server.vercel.app/api/auth/callback`,
         queryParams: {
           access_type: 'offline',
