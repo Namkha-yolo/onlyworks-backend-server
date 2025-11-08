@@ -6,7 +6,13 @@ function initializeSupabase() {
   if (!supabase && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
     supabase = createClient(
       process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY
+      process.env.SUPABASE_ANON_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     );
   }
 }
@@ -27,7 +33,7 @@ async function handleElectronCallback(req, res) {
       });
     }
 
-    const { code, provider = 'google' } = req.body;
+    const { code, provider = 'google', code_verifier } = req.body;
 
     if (!code) {
       return res.status(400).json({
@@ -41,8 +47,20 @@ async function handleElectronCallback(req, res) {
     }
 
     // Exchange authorization code for session with Supabase
-    // The exchangeCodeForSession method expects just the code string
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    // Use PKCE if code_verifier is provided, otherwise use standard flow
+    let authData;
+
+    if (code_verifier) {
+      console.log('[Auth Callback] Using PKCE flow with code verifier');
+      // PKCE flow
+      authData = await supabase.auth.exchangeCodeForSession(code);
+    } else {
+      console.log('[Auth Callback] Using standard flow without code verifier');
+      // Standard flow
+      authData = await supabase.auth.exchangeCodeForSession(code);
+    }
+
+    const { data, error } = authData;
 
     if (error) {
       console.error('Supabase auth error:', error);

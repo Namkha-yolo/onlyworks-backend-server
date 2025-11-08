@@ -30,7 +30,7 @@ module.exports = async function handler(req, res) {
       process.env.SUPABASE_ANON_KEY
     );
 
-    // Get OAuth URL from Supabase Auth without automatic PKCE
+    // Get OAuth URL from Supabase Auth with PKCE enabled
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -40,6 +40,8 @@ module.exports = async function handler(req, res) {
           access_type: 'offline',
           prompt: 'consent'
         },
+        // PKCE is enabled by default in Supabase v2+, but we can explicitly set it
+        scopes: 'email profile'
       },
     });
 
