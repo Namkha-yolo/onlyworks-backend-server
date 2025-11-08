@@ -11,16 +11,117 @@ function initializeSupabase() {
   }
 }
 
+// Handle POST requests from Electron app
+async function handleElectronCallback(req, res) {
+  try {
+    initializeSupabase();
+
+    if (!supabase) {
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: 'SUPABASE_NOT_CONFIGURED',
+          message: 'Supabase not configured',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    const { code, provider = 'google' } = req.body;
+
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_CODE',
+          message: 'Authorization code is required',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // For PKCE flow, we need to generate a code verifier and use it
+    // Since we can't store state between init and callback due to deployment limitations,
+    // let's use a fixed code verifier for now (not secure for production)
+    const codeVerifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+
+    // Exchange authorization code for session with Supabase
+    const { data, error } = await supabase.auth.exchangeCodeForSession({
+      authCode: code,
+      codeVerifier: codeVerifier
+    });
+
+    if (error) {
+      console.error('Supabase auth error:', error);
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'SUPABASE_ERROR',
+          message: error.message,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // Extract user data
+    const { session, user } = data;
+
+    if (!session || !user) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'NO_SESSION',
+          message: 'Failed to create session',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // Return session data in the format expected by the Electron app
+    return res.status(200).json({
+      success: true,
+      data: {
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: session.expires_at,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.user_metadata?.full_name || user.user_metadata?.name,
+          avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+          provider: user.app_metadata?.provider || provider
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('OAuth callback error:', error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Internal server error',
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+}
+
 module.exports = async (req, res) => {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
+  }
+
+  // Handle POST requests from Electron app
+  if (req.method === 'POST') {
+    return handleElectronCallback(req, res, supabase);
   }
 
   if (req.method !== 'GET') {
