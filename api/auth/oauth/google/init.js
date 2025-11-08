@@ -24,11 +24,14 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // Initialize Supabase client
+    // Initialize Supabase client with service role if available
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
     const supabase = createClient(
       process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY
+      supabaseKey
     );
+
+    console.log('[OAuth Init] Using', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'service role' : 'anon key');
 
     // Get OAuth URL from Supabase Auth with PKCE enabled
     const { data, error } = await supabase.auth.signInWithOAuth({

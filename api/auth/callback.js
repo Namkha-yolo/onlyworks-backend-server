@@ -3,17 +3,23 @@ const { createClient } = require('@supabase/supabase-js');
 let supabase = null;
 
 function initializeSupabase() {
-  if (!supabase && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-    supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
+  if (!supabase && process.env.SUPABASE_URL) {
+    // Use service role key if available, otherwise fall back to anon key
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+    if (supabaseKey) {
+      supabase = createClient(
+        process.env.SUPABASE_URL,
+        supabaseKey,
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false
+          }
         }
-      }
-    );
+      );
+      console.log('[Supabase] Initialized with', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'service role' : 'anon key');
+    }
   }
 }
 
