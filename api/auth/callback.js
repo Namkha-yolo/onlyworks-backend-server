@@ -52,23 +52,77 @@ async function handleElectronCallback(req, res) {
       });
     }
 
-    // Exchange authorization code for session with Supabase
-    console.log('[Auth Callback] Attempting code exchange with service role...');
+    // Since Supabase PKCE is causing issues, let's try direct Google OAuth exchange
+    console.log('[Auth Callback] Attempting direct Google OAuth token exchange...');
 
     let data, error;
 
-    // Try admin API first if available
-    if (supabase.auth.admin && supabase.auth.admin.exchangeCodeForSession) {
-      console.log('[Auth Callback] Using admin API for code exchange');
-      const adminResult = await supabase.auth.admin.exchangeCodeForSession(code);
-      data = adminResult.data;
-      error = adminResult.error;
-    } else {
-      // Fallback to regular API (will likely fail due to PKCE)
-      console.log('[Auth Callback] Using regular API for code exchange');
-      const regularResult = await supabase.auth.exchangeCodeForSession(code);
-      data = regularResult.data;
-      error = regularResult.error;
+    try {
+      // Exchange code directly with Google
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: '1098053497294-5nufru8qoiuoimleqrec2rjkgvv3cs5n.apps.googleusercontent.com',
+          client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+          code: code,
+          grant_type: 'authorization_code',
+          redirect_uri: 'https://onlyworks-backend-server.vercel.app/api/auth/callback'
+        })
+      });
+
+      if (!tokenResponse.ok) {
+        throw new Error(`Google OAuth failed: ${tokenResponse.status}`);
+      }
+
+      const tokens = await tokenResponse.json();
+      console.log('[Auth Callback] Received tokens from Google:', { access_token: !!tokens.access_token, refresh_token: !!tokens.refresh_token });
+
+      // Get user info from Google
+      const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: {
+          Authorization: `Bearer ${tokens.access_token}`
+        }
+      });
+
+      if (!userResponse.ok) {
+        throw new Error(`Google user info failed: ${userResponse.status}`);
+      }
+
+      const googleUser = await userResponse.json();
+      console.log('[Auth Callback] Received user info from Google:', { id: googleUser.id, email: googleUser.email });
+
+      // Create a session object in the expected format
+      data = {
+        session: {
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          expires_at: Date.now() + (tokens.expires_in * 1000)
+        },
+        user: {
+          id: googleUser.id,
+          email: googleUser.email,
+          user_metadata: {
+            full_name: googleUser.name,
+            avatar_url: googleUser.picture,
+            provider: 'google'
+          },
+          app_metadata: {
+            provider: 'google'
+          }
+        }
+      };
+
+      error = null;
+    } catch (directError) {
+      console.error('[Auth Callback] Direct OAuth failed, falling back to Supabase:', directError);
+
+      // Fallback to Supabase (will likely fail due to PKCE)
+      const supabaseResult = await supabase.auth.exchangeCodeForSession(code);
+      data = supabaseResult.data;
+      error = supabaseResult.error;
     }
 
     if (error) {
