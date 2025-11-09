@@ -253,7 +253,7 @@ app.get('/api/auth/oauth/google/init', (req, res) => {
   res.json({
     success: true,
     data: {
-      authUrl: 'https://accounts.google.com/oauth/authorize?client_id=mock&redirect_uri=mock&scope=email%20profile',
+      auth_url: 'https://accounts.google.com/oauth/authorize?client_id=mock&redirect_uri=mock&scope=email%20profile',
       state: 'mock-state-' + Date.now()
     },
     message: 'OAuth init successful (mock)'
