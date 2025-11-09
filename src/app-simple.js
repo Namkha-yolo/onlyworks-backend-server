@@ -235,6 +235,61 @@ app.put('/api/sessions/:sessionId/resume', simpleAuth, (req, res) => {
   });
 });
 
+app.get('/api/sessions/:sessionId', simpleAuth, (req, res) => {
+  const { sessionId } = req.params;
+
+  const mockSession = {
+    id: sessionId,
+    session_name: 'Work Session',
+    goal_description: 'Complete project tasks',
+    status: 'completed',
+    start_time: '2024-01-01T09:00:00Z',
+    end_time: '2024-01-01T11:00:00Z',
+    duration_minutes: 120,
+    productivity_score: 8.5,
+    focus_score: 9.0,
+    created_at: '2024-01-01T09:00:00Z',
+    updated_at: '2024-01-01T11:00:00Z'
+  };
+
+  res.json({
+    success: true,
+    data: mockSession
+  });
+});
+
+app.put('/api/sessions/:sessionId/scores', simpleAuth, (req, res) => {
+  const { sessionId } = req.params;
+  const { productivity_score, focus_score } = req.body;
+
+  res.json({
+    success: true,
+    data: {
+      id: sessionId,
+      productivity_score,
+      focus_score,
+      updated_at: new Date().toISOString()
+    },
+    message: 'Session scores updated successfully'
+  });
+});
+
+app.post('/api/sessions/:sessionId/screenshots', simpleAuth, (req, res) => {
+  const { sessionId } = req.params;
+  const { screenshot_data, timestamp } = req.body;
+
+  res.json({
+    success: true,
+    data: {
+      id: `screenshot-${Date.now()}`,
+      session_id: sessionId,
+      timestamp: timestamp || new Date().toISOString(),
+      created_at: new Date().toISOString()
+    },
+    message: 'Screenshot uploaded successfully'
+  });
+});
+
 app.get('/api/sessions/stats/summary', simpleAuth, (req, res) => {
   res.json({
     success: true,
@@ -274,11 +329,21 @@ app.get('/api/auth/oauth/google/init', (req, res) => {
   });
 });
 
+// Legacy endpoint redirect for backward compatibility
+app.post('/api/auth/callback', async (req, res) => {
+  console.log('[Legacy Redirect] Received request at /api/auth/callback, redirecting to OAuth endpoint...');
+  // Forward to the correct OAuth endpoint
+  req.url = '/api/auth/oauth/google/callback';
+  return app.handle(req, res);
+});
+
 app.post('/api/auth/oauth/google/callback', async (req, res) => {
   try {
     const { code, state } = req.body;
+    console.log('[OAuth Callback] Received request:', { code: code ? code.substring(0, 20) + '...' : null, state });
 
     if (!code) {
+      console.log('[OAuth Callback] Missing code in request body');
       return res.status(400).json({
         success: false,
         error: { message: 'Authorization code is required' }
@@ -290,6 +355,7 @@ app.post('/api/auth/oauth/google/callback', async (req, res) => {
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET || 'your-client-secret-here';
     const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'https://onlyworks-backend-server.onrender.com/api/auth/oauth/google/callback';
 
+    console.log('[OAuth Callback] Exchanging code for token with Google API...');
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
@@ -305,8 +371,11 @@ app.post('/api/auth/oauth/google/callback', async (req, res) => {
     });
 
     const tokenData = await tokenResponse.json();
+    console.log('[OAuth Callback] Google token response status:', tokenResponse.status);
+    console.log('[OAuth Callback] Google token response data:', tokenData);
 
     if (!tokenResponse.ok) {
+      console.log('[OAuth Callback] Google token exchange failed:', tokenData);
       throw new Error(tokenData.error_description || 'Failed to exchange code for token');
     }
 
@@ -432,6 +501,17 @@ app.post('/api/auth/token/refresh', (req, res) => {
       expiresIn: 3600
     },
     message: 'Token refreshed successfully (mock)'
+  });
+});
+
+app.get('/api/auth/validate', simpleAuth, (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      user: req.user,
+      valid: true
+    },
+    message: 'Session is valid'
   });
 });
 
