@@ -248,35 +248,180 @@ app.get('/api/sessions/stats/summary', simpleAuth, (req, res) => {
   });
 });
 
-// OAuth endpoints for mock authentication
+// OAuth endpoints with real Google credentials
 app.get('/api/auth/oauth/google/init', (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID || 'your-client-id-here';
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'https://onlyworks-backend-server.onrender.com/api/auth/oauth/google/callback';
+  const scope = 'openid email profile';
+  const state = 'onlyworks-' + Date.now();
+
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${encodeURIComponent(clientId)}&` +
+    `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+    `scope=${encodeURIComponent(scope)}&` +
+    `response_type=code&` +
+    `state=${encodeURIComponent(state)}&` +
+    `access_type=offline&` +
+    `prompt=consent`;
+
   res.json({
     success: true,
     data: {
-      auth_url: 'https://accounts.google.com/oauth/authorize?client_id=mock&redirect_uri=mock&scope=email%20profile',
-      state: 'mock-state-' + Date.now()
+      auth_url: authUrl,
+      state: state
     },
-    message: 'OAuth init successful (mock)'
+    message: 'OAuth init successful'
   });
 });
 
-app.post('/api/auth/oauth/google/callback', (req, res) => {
-  const { code, state } = req.body;
+app.post('/api/auth/oauth/google/callback', async (req, res) => {
+  try {
+    const { code, state } = req.body;
 
-  res.json({
-    success: true,
-    data: {
-      user: {
-        id: 'user-123',
-        email: 'test@example.com',
-        name: 'Test User',
-        avatar: 'https://via.placeholder.com/64'
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Authorization code is required' }
+      });
+    }
+
+    // Exchange code for access token
+    const clientId = process.env.GOOGLE_CLIENT_ID || 'your-client-id-here';
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET || 'your-client-secret-here';
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'https://onlyworks-backend-server.onrender.com/api/auth/oauth/google/callback';
+
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      token: 'mock-jwt-token-' + Date.now(),
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: code,
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenResponse.ok) {
+      throw new Error(tokenData.error_description || 'Failed to exchange code for token');
+    }
+
+    // Get user info
+    const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        'Authorization': `Bearer ${tokenData.access_token}`,
+      },
+    });
+
+    const userData = await userResponse.json();
+
+    if (!userResponse.ok) {
+      throw new Error('Failed to fetch user information');
+    }
+
+    // Generate JWT token for your app (you'd implement proper JWT here)
+    const appToken = 'jwt-' + userData.id + '-' + Date.now();
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: userData.id,
+          email: userData.email,
+          name: userData.name,
+          avatar: userData.picture
+        },
+        token: appToken,
+        expiresIn: 3600
+      },
+      message: 'OAuth callback successful'
+    });
+
+  } catch (error) {
+    console.error('OAuth callback error:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message || 'OAuth callback failed' }
+    });
+  }
+});
+
+// Handle GET callback from Google OAuth redirect
+app.get('/api/auth/oauth/google/callback', async (req, res) => {
+  try {
+    const { code, state, error } = req.query;
+
+    if (error) {
+      return res.redirect(`onlyworks://auth/callback?error=${encodeURIComponent(error)}`);
+    }
+
+    if (!code) {
+      return res.redirect('onlyworks://auth/callback?error=missing_code');
+    }
+
+    // Exchange code for access token (same logic as POST)
+    const clientId = process.env.GOOGLE_CLIENT_ID || 'your-client-id-here';
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET || 'your-client-secret-here';
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'https://onlyworks-backend-server.onrender.com/api/auth/oauth/google/callback';
+
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: code,
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenResponse.ok) {
+      throw new Error(tokenData.error_description || 'Failed to exchange code for token');
+    }
+
+    // Get user info
+    const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        'Authorization': `Bearer ${tokenData.access_token}`,
+      },
+    });
+
+    const userData = await userResponse.json();
+
+    if (!userResponse.ok) {
+      throw new Error('Failed to fetch user information');
+    }
+
+    // Generate JWT token for your app
+    const appToken = 'jwt-' + userData.id + '-' + Date.now();
+
+    // Redirect back to Electron app with user data
+    const userDataEncoded = encodeURIComponent(JSON.stringify({
+      user: {
+        id: userData.id,
+        email: userData.email,
+        name: userData.name,
+        avatar: userData.picture
+      },
+      token: appToken,
       expiresIn: 3600
-    },
-    message: 'OAuth callback successful (mock)'
-  });
+    }));
+
+    res.redirect(`onlyworks://auth/callback?data=${userDataEncoded}`);
+
+  } catch (error) {
+    console.error('OAuth callback error:', error);
+    res.redirect(`onlyworks://auth/callback?error=${encodeURIComponent(error.message)}`);
+  }
 });
 
 app.post('/api/auth/token/refresh', (req, res) => {
