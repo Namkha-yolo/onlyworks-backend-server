@@ -248,6 +248,55 @@ app.get('/api/sessions/stats/summary', simpleAuth, (req, res) => {
   });
 });
 
+// OAuth endpoints for mock authentication
+app.get('/api/auth/oauth/google/init', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      authUrl: 'https://accounts.google.com/oauth/authorize?client_id=mock&redirect_uri=mock&scope=email%20profile',
+      state: 'mock-state-' + Date.now()
+    },
+    message: 'OAuth init successful (mock)'
+  });
+});
+
+app.post('/api/auth/oauth/google/callback', (req, res) => {
+  const { code, state } = req.body;
+
+  res.json({
+    success: true,
+    data: {
+      user: {
+        id: 'user-123',
+        email: 'test@example.com',
+        name: 'Test User',
+        avatar: 'https://via.placeholder.com/64'
+      },
+      token: 'mock-jwt-token-' + Date.now(),
+      expiresIn: 3600
+    },
+    message: 'OAuth callback successful (mock)'
+  });
+});
+
+app.post('/api/auth/token/refresh', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      token: 'mock-refreshed-token-' + Date.now(),
+      expiresIn: 3600
+    },
+    message: 'Token refreshed successfully (mock)'
+  });
+});
+
+app.post('/api/auth/logout', simpleAuth, (req, res) => {
+  res.json({
+    success: true,
+    message: 'Logout successful (mock)'
+  });
+});
+
 // Catch 404
 app.use((req, res) => {
   res.status(404).json({
