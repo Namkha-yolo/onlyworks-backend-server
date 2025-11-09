@@ -2,34 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/index.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/**/*.js",
+      "src": "index.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/health",
-      "dest": "/api/health.js"
-    },
-    {
-      "src": "/api/sessions/stats/summary",
-      "dest": "/api/sessions/stats/summary.js"
-    },
-    {
-      "src": "/api/auth/oauth/google/init",
-      "dest": "/api/auth/oauth/google/init.js"
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1.js"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/api/index.js"
+      "dest": "/index.js"
     }
   ]
 }

@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: onlyworks-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+    domains:
+      - onlyworks-api.onrender.com

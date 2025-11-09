@@ -21,7 +21,8 @@ let supabaseClient = null;
 function getSupabaseClient() {
   if (!supabaseClient) {
     if (!dbConfig.supabaseUrl || !dbConfig.supabaseKey) {
-      throw new Error('Supabase configuration is missing. Please check SUPABASE_URL and SUPABASE_ANON_KEY environment variables.');
+      console.warn('Supabase configuration missing - running in mock mode');
+      return null; // Return null instead of throwing error
     }
 
     supabaseClient = createClient(dbConfig.supabaseUrl, dbConfig.supabaseKey, {

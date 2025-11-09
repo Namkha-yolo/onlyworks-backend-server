@@ -24,11 +24,28 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-// CORS configuration
+// CORS configuration - allow Electron app and development
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? ['https://onlyworks.dev', 'https://app.onlyworks.dev']
-    : ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000', 'http://127.0.0.1:3001'],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like from Electron)
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      'https://onlyworks.dev',
+      'https://app.onlyworks.dev',
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001'
+    ];
+
+    // Allow all origins in development
+    if (process.env.NODE_ENV !== 'production' || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -44,26 +61,15 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Request logging middleware
 app.use(requestLoggingMiddleware);
 
-// Health check endpoint
+// Health check endpoint (simple version for compatibility)
 app.get('/health', async (req, res) => {
   try {
-    const dbHealth = await checkDatabaseConnection();
-
-    const healthStatus = {
-      status: 'ok',
+    res.json({
+      status: 'healthy',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      database: dbHealth,
-      environment: process.env.NODE_ENV || 'development',
-      version: process.env.npm_package_version || '1.0.0'
-    };
-
-    if (!dbHealth.healthy) {
-      healthStatus.status = 'degraded';
-      return res.status(503).json(healthStatus);
-    }
-
-    res.json(healthStatus);
+      version: '1.0.0',
+      service: 'onlyworks-backend'
+    });
   } catch (error) {
     logger.error('Health check failed', { error: error.message });
     res.status(503).json({

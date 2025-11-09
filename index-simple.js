@@ -1,4 +1,3 @@
-// Use simple app for now to avoid database dependencies
 const app = require('./src/app-simple');
 
 const PORT = process.env.PORT || 8080;
