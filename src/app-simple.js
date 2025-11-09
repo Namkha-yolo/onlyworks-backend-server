@@ -504,6 +504,18 @@ app.post('/api/auth/token/refresh', (req, res) => {
   });
 });
 
+// Alias for frontend compatibility
+app.post('/api/auth/refresh', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      token: 'mock-refreshed-token-' + Date.now(),
+      expiresIn: 3600
+    },
+    message: 'Token refreshed successfully (mock)'
+  });
+});
+
 app.get('/api/auth/validate', simpleAuth, (req, res) => {
   res.json({
     success: true,
