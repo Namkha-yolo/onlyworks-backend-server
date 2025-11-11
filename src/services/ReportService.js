@@ -443,46 +443,6 @@ class ReportService {
     }
   }
 
-  async exportReport(reportData, options = {}) {
-    try {
-      const { format, filename, userId } = options;
-
-      const timestamp = new Date().toISOString().split('T')[0];
-      const defaultFilename = `report_${timestamp}.${format}`;
-      const finalFilename = filename || defaultFilename;
-
-      switch (format.toLowerCase()) {
-        case 'json':
-          return {
-            filename: finalFilename,
-            content: JSON.stringify(reportData, null, 2),
-            contentType: 'application/json'
-          };
-
-        case 'csv':
-          return {
-            filename: finalFilename,
-            content: this.convertToCSV(reportData),
-            contentType: 'text/csv'
-          };
-
-        case 'pdf':
-          // Note: This would require a PDF generation library like puppeteer or jsPDF
-          throw new ApiError('NOT_IMPLEMENTED', { feature: 'PDF export' });
-
-        case 'xlsx':
-          // Note: This would require an Excel generation library like exceljs
-          throw new ApiError('NOT_IMPLEMENTED', { feature: 'Excel export' });
-
-        default:
-          throw new ApiError('INVALID_INPUT', { field: 'format', value: format });
-      }
-    } catch (error) {
-      if (error instanceof ApiError) throw error;
-      logger.error('Failed to export report', { error: error.message, format: options.format });
-      throw new ApiError('INTERNAL_ERROR', { operation: 'export_report' });
-    }
-  }
 
   // Helper methods
   getTimeRange(timeframe) {
@@ -593,18 +553,6 @@ class ReportService {
     return recommendations;
   }
 
-  convertToCSV(data) {
-    // Simple CSV conversion - would need more sophisticated implementation
-    if (Array.isArray(data)) {
-      const headers = Object.keys(data[0] || {});
-      const rows = data.map(item => headers.map(h => item[h] || '').join(','));
-      return [headers.join(','), ...rows].join('\n');
-    }
-
-    // For non-array data, flatten to key-value pairs
-    const entries = Object.entries(data);
-    return ['Key,Value', ...entries.map(([k, v]) => `${k},${JSON.stringify(v)}`)].join('\n');
-  }
 
   // Placeholder methods - would need full implementation
   identifyPeakHours(sessions) { return ['9-11', '14-16']; }

@@ -151,35 +151,6 @@ class ReportController {
     });
   });
 
-  // Export report in different formats
-  exportReport = asyncHandler(async (req, res) => {
-    const { userId } = req.user;
-    const { reportData, format, filename } = req.body;
-
-    logger.info('Exporting report', { userId, format, filename });
-
-    validateRequired({ reportData, format }, ['reportData', 'format']);
-
-    const exportedReport = await this.reportService.exportReport(reportData, {
-      format: format, // 'pdf', 'csv', 'json', 'xlsx'
-      filename: filename,
-      userId
-    });
-
-    if (format === 'pdf' || format === 'xlsx') {
-      // For binary formats, set appropriate headers and send file
-      res.setHeader('Content-Type', format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="${exportedReport.filename}"`);
-      res.send(exportedReport.buffer);
-    } else {
-      // For text formats, return JSON response
-      res.json({
-        success: true,
-        data: exportedReport,
-        message: `Report exported successfully as ${format.toUpperCase()}`
-      });
-    }
-  });
 }
 
 module.exports = ReportController;

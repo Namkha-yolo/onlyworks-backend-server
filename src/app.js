@@ -8,6 +8,7 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { checkDatabaseConnection } = require('./config/database');
 
 // Route imports
+const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const workSessionRoutes = require('./routes/workSessionRoutes');
 const screenshotRoutes = require('./routes/screenshotRoutes');
@@ -81,6 +82,7 @@ app.get('/health', async (req, res) => {
 });
 
 // API routes
+app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/sessions', workSessionRoutes);
 app.use('/api/screenshots', screenshotRoutes);

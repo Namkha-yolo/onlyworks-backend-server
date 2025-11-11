@@ -1,8 +1,8 @@
 // Load environment variables
 require('dotenv').config();
 
-// Use simple app for now to avoid database dependencies
-const app = require('./src/app-simple');
+// Use real app with database connections
+const app = require('./src/app');
 
 const PORT = process.env.PORT || 8080;
 

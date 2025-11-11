@@ -42,6 +42,27 @@ function log(level, message, context = {}) {
   const { req, ...cleanContext } = context;
   const finalLogEntry = { ...logEntry, ...cleanContext };
 
+  // Additional safety check to prevent circular references
+  try {
+    JSON.stringify(finalLogEntry);
+  } catch (err) {
+    // If we still have circular references, log without the problematic context
+    const safeLogEntry = {
+      timestamp: logEntry.timestamp,
+      level: logEntry.level,
+      message: logEntry.message,
+      service: logEntry.service,
+      environment: logEntry.environment,
+      requestId: logEntry.requestId,
+      userId: logEntry.userId,
+      endpoint: logEntry.endpoint,
+      userAgent: logEntry.userAgent,
+      ip: logEntry.ip
+    };
+    console.log(JSON.stringify(safeLogEntry));
+    return;
+  }
+
   // Output to console (Vercel will capture this)
   console.log(JSON.stringify(finalLogEntry));
 
