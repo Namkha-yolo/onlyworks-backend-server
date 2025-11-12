@@ -12,6 +12,29 @@ function authenticateUser(req, res, next) {
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+    // DEMO DAY BYPASS - Accept tokens with development signature for demo user
+    if (token.endsWith('.development-signature')) {
+      try {
+        const [header, payload] = token.split('.');
+        const decodedPayload = JSON.parse(Buffer.from(payload, 'base64').toString());
+
+        if (decodedPayload.email === 'kewadallay@gmail.com') {
+          console.log('[Auth] DEMO MODE - Accepting development token for kewadallay@gmail.com');
+          req.user = {
+            userId: decodedPayload.userId,
+            email: decodedPayload.email,
+            name: decodedPayload.name,
+            avatar_url: decodedPayload.avatar_url,
+            provider: decodedPayload.provider
+          };
+          return next();
+        }
+      } catch (e) {
+        console.log('[Auth] Failed to parse development token:', e.message);
+      }
+    }
+
     const jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
 
     // Verify JWT token

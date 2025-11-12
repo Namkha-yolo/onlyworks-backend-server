@@ -12,10 +12,12 @@ const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const workSessionRoutes = require('./routes/workSessionRoutes');
 const screenshotRoutes = require('./routes/screenshotRoutes');
+const enhancedScreenshotRoutes = require('./routes/enhancedScreenshotRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const goalRoutes = require('./routes/goalRoutes');
 const teamRoutes = require('./routes/teamRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const backtestRoutes = require('./routes/backtestRoutes');
 
 const app = express();
 
@@ -86,10 +88,12 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/sessions', workSessionRoutes);
 app.use('/api/screenshots', screenshotRoutes);
+app.use('/api/screenshots', enhancedScreenshotRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/backtest', backtestRoutes);
 
 // Catch 404 and forward to error handler
 app.use(notFoundHandler);
