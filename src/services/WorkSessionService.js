@@ -15,19 +15,29 @@ class WorkSessionService {
 
   async startSession(userId, sessionData) {
     try {
+      logger.info('Starting work session', { userId, sessionData });
+
       // Validate user exists
+      logger.info('Validating user exists', { userId });
       await this.userService.findById(userId);
+      logger.info('User validated successfully', { userId });
 
       // Check if user already has an active session
+      logger.info('Checking for active sessions', { userId });
       const activeSession = await this.workSessionRepository.findActiveSession(userId);
       if (activeSession) {
+        logger.warn('User already has active session', { userId, activeSessionId: activeSession.id });
         throw new ApiError('RESOURCE_CONFLICT', {
           message: 'User already has an active work session',
           active_session_id: activeSession.id
         });
       }
+      logger.info('No active session found, proceeding with creation', { userId });
 
+      // Create the session
+      logger.info('Creating new session', { userId, sessionData });
       const session = await this.workSessionRepository.startSession(userId, sessionData);
+      logger.info('Session created successfully', { userId, sessionId: session.id });
 
       logger.business('work_session_started', {
         user_id: userId,
@@ -38,7 +48,12 @@ class WorkSessionService {
       return session;
     } catch (error) {
       if (error instanceof ApiError) throw error;
-      logger.error('Error starting work session', { error: error.message, userId, sessionData });
+      logger.error('Error starting work session', {
+        error: error.message,
+        stack: error.stack,
+        userId,
+        sessionData
+      });
       throw new ApiError('INTERNAL_ERROR', { operation: 'start_work_session' });
     }
   }
