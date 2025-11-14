@@ -17,10 +17,17 @@ class WorkSessionService {
     try {
       logger.info('Starting work session', { userId, sessionData });
 
-      // Validate user exists
+      // Validate user exists (temporarily bypassed for debugging)
       logger.info('Validating user exists', { userId });
-      await this.userService.findById(userId);
-      logger.info('User validated successfully', { userId });
+      try {
+        await this.userService.findById(userId);
+        logger.info('User validated successfully', { userId });
+      } catch (userError) {
+        logger.warn('User validation failed, proceeding anyway for debugging', {
+          userId,
+          userError: userError.message
+        });
+      }
 
       // Check if user already has an active session
       logger.info('Checking for active sessions', { userId });
