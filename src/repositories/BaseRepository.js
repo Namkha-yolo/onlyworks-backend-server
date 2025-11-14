@@ -70,6 +70,8 @@ class BaseRepository {
   async create(data) {
     try {
       const startTime = Date.now();
+      logger.info(`Creating record in ${this.tableName}`, { data });
+
       const { data: result, error } = await this.supabase
         .from(this.tableName)
         .insert([data])
@@ -80,6 +82,13 @@ class BaseRepository {
       logger.database('INSERT', this.tableName, duration, { data });
 
       if (error) {
+        logger.error(`Database error creating ${this.tableName}`, {
+          error: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          data
+        });
         throw error;
       }
 

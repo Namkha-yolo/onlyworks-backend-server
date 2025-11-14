@@ -7,6 +7,9 @@ class WorkSessionRepository extends BaseRepository {
 
   async findActiveSession(userId) {
     try {
+      const { logger } = require('../utils/logger');
+      logger.info(`Finding active session for user ${userId} in table ${this.tableName}`);
+
       const { data, error } = await this.supabase
         .from(this.tableName)
         .select('*')
@@ -17,11 +20,25 @@ class WorkSessionRepository extends BaseRepository {
         .single();
 
       if (error && error.code !== 'PGRST116') {
+        logger.error(`Error finding active session`, {
+          error: error.message,
+          code: error.code,
+          details: error.details,
+          userId,
+          tableName: this.tableName
+        });
         throw error;
       }
 
+      logger.info(`Active session query result`, { data, userId });
       return data;
     } catch (error) {
+      const { logger } = require('../utils/logger');
+      logger.error(`Exception in findActiveSession`, {
+        error: error.message,
+        userId,
+        tableName: this.tableName
+      });
       throw error;
     }
   }
