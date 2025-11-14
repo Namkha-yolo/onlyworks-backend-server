@@ -5,7 +5,49 @@ const { authenticateUser } = require('../middleware/auth');
 const router = express.Router();
 const workSessionController = new WorkSessionController();
 
-// Apply authentication to all work session routes
+// Test endpoint for database schema debugging (no auth required)
+router.post('/test-create', async (req, res) => {
+  try {
+    const WorkSessionRepository = require('../repositories/WorkSessionRepository');
+    const { logger } = require('../utils/logger');
+
+    logger.info('Testing work session creation without auth');
+
+    const workSessionRepo = new WorkSessionRepository();
+    const testSession = await workSessionRepo.create({
+      user_id: '8116fff2-0a45-43a1-a242-9ab7656fd2a8',
+      session_name: 'Test Session',
+      goal_description: 'Database schema test',
+      started_at: new Date().toISOString(),
+      status: 'active'
+    });
+
+    logger.info('Test session created successfully', { sessionId: testSession.id });
+
+    res.json({
+      success: true,
+      data: testSession,
+      message: 'Test session created successfully'
+    });
+  } catch (error) {
+    logger.error('Test session creation failed', {
+      error: error.message,
+      code: error.code,
+      details: error.details
+    });
+
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error.message,
+        code: error.code,
+        details: error.details
+      }
+    });
+  }
+});
+
+// Apply authentication to all other work session routes
 router.use(authenticateUser);
 
 // Start a new work session
