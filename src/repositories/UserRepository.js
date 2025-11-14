@@ -42,7 +42,7 @@ class UserRepository extends BaseRepository {
   }
 
   async updateProfile(userId, profileData) {
-    const allowedFields = ['display_name', 'avatar_url', 'timezone'];
+    const allowedFields = ['display_name', 'avatar_url', 'timezone', 'onboarding_completed', 'full_name', 'job_title', 'company'];
     const updateData = {};
 
     allowedFields.forEach(field => {
