@@ -17,7 +17,11 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const goalRoutes = require('./routes/goalRoutes');
 const teamRoutes = require('./routes/teamRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const analysisRoutes = require('./routes/analysisRoutes');
 const backtestRoutes = require('./routes/backtestRoutes');
+const batchProcessingRoutes = require('./routes/batchProcessingRoutes');
+const userSessionRoutes = require('./routes/userSessionRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
 
 const app = express();
 
@@ -93,7 +97,11 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/analysis', analysisRoutes);
 app.use('/api/backtest', backtestRoutes);
+app.use('/api/batch', batchProcessingRoutes);
+app.use('/api/user-session', userSessionRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Catch 404 and forward to error handler
 app.use(notFoundHandler);

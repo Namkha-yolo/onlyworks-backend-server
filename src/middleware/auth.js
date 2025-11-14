@@ -1,8 +1,12 @@
 const jwt = require('jsonwebtoken');
 const { ApiError } = require('./errorHandler');
 const { logger } = require('../utils/logger');
+const UserSessionService = require('../services/UserSessionService');
 
-// Real JWT authentication middleware
+// Initialize session service
+const userSessionService = new UserSessionService();
+
+// Enhanced JWT authentication middleware with session persistence
 function authenticateUser(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
@@ -21,13 +25,34 @@ function authenticateUser(req, res, next) {
 
         if (decodedPayload.email === 'kewadallay@gmail.com') {
           console.log('[Auth] DEMO MODE - Accepting development token for kewadallay@gmail.com');
+
+          // Use a proper UUID for demo user
+          const demoUserId = 'b8f3d1e2-7a5c-4d9f-8b1e-2c3a4f5e6d7c';
+
           req.user = {
-            userId: decodedPayload.userId,
+            userId: demoUserId,
             email: decodedPayload.email,
             name: decodedPayload.name,
             avatar_url: decodedPayload.avatar_url,
             provider: decodedPayload.provider
           };
+
+          // Create a mock session for demo user (skip database lookup)
+          req.userSession = {
+            userId: demoUserId,
+            email: decodedPayload.email,
+            name: decodedPayload.name,
+            avatar_url: decodedPayload.avatar_url,
+            provider: decodedPayload.provider,
+            sessionStarted: new Date().toISOString(),
+            lastActivity: new Date().toISOString(),
+            preferences: {},
+            recentActivity: [],
+            isInitialized: true,
+            isDemo: true
+          };
+          logger.info('Demo user session created (no database lookup)', { userId: demoUserId });
+
           return next();
         }
       } catch (e) {
@@ -47,6 +72,61 @@ function authenticateUser(req, res, next) {
       avatar_url: decoded.avatar_url,
       provider: decoded.provider
     };
+
+    // Initialize user session asynchronously (don't block request)
+    userSessionService.getUserSession(decoded.userId)
+      .then(sessionResult => {
+        if (sessionResult.success) {
+          req.userSession = sessionResult.data;
+
+          // Record authentication activity
+          userSessionService.recordUserActivity(decoded.userId, {
+            type: 'authentication',
+            action: 'token_verified',
+            details: {
+              provider: decoded.provider,
+              timestamp: new Date().toISOString()
+            }
+          }).catch(err => logger.debug('Activity recording failed', { error: err.message }));
+        } else {
+          // Create minimal session if user lookup fails
+          req.userSession = {
+            userId: decoded.userId,
+            email: decoded.email,
+            name: decoded.name,
+            avatar_url: decoded.avatar_url,
+            provider: decoded.provider,
+            sessionStarted: new Date().toISOString(),
+            lastActivity: new Date().toISOString(),
+            preferences: {},
+            recentActivity: [],
+            isInitialized: false,
+            isDemo: false
+          };
+          logger.info('Created minimal session for user not found in database', { userId: decoded.userId });
+        }
+      })
+      .catch(err => {
+        logger.warn('Session initialization failed', {
+          userId: decoded.userId,
+          error: err.message
+        });
+
+        // Create minimal session as fallback
+        req.userSession = {
+          userId: decoded.userId,
+          email: decoded.email,
+          name: decoded.name,
+          avatar_url: decoded.avatar_url,
+          provider: decoded.provider,
+          sessionStarted: new Date().toISOString(),
+          lastActivity: new Date().toISOString(),
+          preferences: {},
+          recentActivity: [],
+          isInitialized: false,
+          isDemo: false
+        };
+      });
 
     next();
   } catch (error) {
@@ -125,5 +205,6 @@ function requireRole(role) {
 module.exports = {
   authenticateUser,
   optionalAuth,
-  requireRole
+  requireRole,
+  userSessionService
 };

@@ -124,6 +124,26 @@ class UserService {
     }
     return true;
   }
+
+  async getSettings(userId) {
+    try {
+      const settings = await this.userRepository.getUserSettings(userId);
+      return settings?.settings || {};
+    } catch (error) {
+      logger.error('Error getting user settings', { error: error.message, userId });
+      throw new ApiError('INTERNAL_ERROR', { operation: 'get_user_settings' });
+    }
+  }
+
+  async updateSettings(userId, settingsData) {
+    try {
+      const updatedSettings = await this.userRepository.updateUserSettings(userId, settingsData);
+      return updatedSettings.settings;
+    } catch (error) {
+      logger.error('Error updating user settings', { error: error.message, userId });
+      throw new ApiError('INTERNAL_ERROR', { operation: 'update_user_settings' });
+    }
+  }
 }
 
 module.exports = UserService;

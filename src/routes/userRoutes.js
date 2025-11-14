@@ -15,6 +15,12 @@ router.get('/profile', userController.getProfile);
 // Update user profile
 router.put('/profile', userController.updateProfile);
 
+// Get user settings
+router.get('/settings', userController.getSettings);
+
+// Update user settings
+router.put('/settings', userController.updateSettings);
+
 // Get user by ID
 router.get('/:id', userController.getUserById);
 

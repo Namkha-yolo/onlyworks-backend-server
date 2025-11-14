@@ -1,6 +1,7 @@
 const ScreenshotRepository = require('../repositories/ScreenshotRepository');
 const ScreenshotAnalysisRepository = require('../repositories/ScreenshotAnalysisRepository');
 const AIAnalysisService = require('../services/AIAnalysisService');
+const FileStorageService = require('../services/FileStorageService');
 const { asyncHandler, validateRequired } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
 
@@ -9,22 +10,64 @@ class ScreenshotController {
     this.screenshotRepository = new ScreenshotRepository();
     this.analysisRepository = new ScreenshotAnalysisRepository();
     this.aiService = new AIAnalysisService();
+    this.fileStorage = new FileStorageService();
   }
 
-  // Upload screenshot metadata
+  // Upload screenshot with optional file
   uploadScreenshot = asyncHandler(async (req, res) => {
     const { userId } = req.user;
-    const { sessionId } = req.params;
-    const screenshotData = req.body;
+    const { sessionId, ...screenshotData } = req.body;
+    const uploadedFile = req.file;
 
-    logger.info('Uploading screenshot metadata', { userId, sessionId, screenshotData });
+    logger.info('Uploading screenshot', {
+      userId,
+      sessionId,
+      hasFile: !!uploadedFile,
+      fileSize: uploadedFile?.size,
+      metadata: screenshotData
+    });
 
-    // Validate required fields
-    validateRequired(screenshotData, ['file_storage_key', 'file_size_bytes']);
+    let finalScreenshotData = { ...screenshotData };
+
+    // Handle file upload if present
+    if (uploadedFile) {
+      const fileName = `screenshot_${Date.now()}.${uploadedFile.mimetype.split('/')[1]}`;
+
+      const uploadResult = await this.fileStorage.uploadFile(
+        uploadedFile.buffer,
+        fileName,
+        {
+          contentType: uploadedFile.mimetype,
+          userId,
+          sessionId
+        }
+      );
+
+      if (!uploadResult.success) {
+        return res.status(500).json({
+          success: false,
+          error: uploadResult.error
+        });
+      }
+
+      // Use upload result data
+      finalScreenshotData = {
+        ...finalScreenshotData,
+        file_storage_key: uploadResult.data.path,
+        file_size_bytes: uploadedFile.size,
+        public_url: uploadResult.data.publicUrl
+      };
+    } else {
+      // Validate required fields for metadata-only uploads
+      validateRequired(req.body, ['sessionId', 'file_storage_key', 'file_size_bytes']);
+    }
+
+    // Validate sessionId is present
+    validateRequired(req.body, ['sessionId']);
 
     const screenshot = await this.screenshotRepository.createScreenshot(userId, sessionId, {
-      ...screenshotData,
-      timestamp: screenshotData.timestamp || new Date().toISOString()
+      ...finalScreenshotData,
+      timestamp: finalScreenshotData.timestamp || new Date().toISOString()
     });
 
     // Queue for AI analysis

@@ -14,7 +14,21 @@ class WorkSessionController {
 
     logger.info('Starting work session', { userId, sessionData });
 
-    const session = await this.workSessionService.startSession(userId, sessionData);
+    // Check if this is a demo user - skip user validation
+    const isDemoUser = req.userSession?.isDemo;
+    let session;
+
+    if (isDemoUser) {
+      // For demo users, create session directly without user validation
+      logger.info('Demo user detected, skipping user validation', { userId });
+      const workSessionRepository = require('../repositories/WorkSessionRepository');
+      const workSessionRepo = new workSessionRepository();
+
+      session = await workSessionRepo.startSession(userId, sessionData);
+      logger.info('Demo session started successfully', { userId, sessionId: session.id });
+    } else {
+      session = await this.workSessionService.startSession(userId, sessionData);
+    }
 
     res.status(201).json({
       success: true,

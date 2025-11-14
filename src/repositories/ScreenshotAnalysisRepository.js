@@ -10,14 +10,14 @@ class ScreenshotAnalysisRepository extends BaseRepository {
       screenshot_id: screenshotId,
       user_id: userId,
       activity_detected: analysisData.activity_detected,
-      productivity_score: analysisData.productivity_score,
-      confidence_score: analysisData.confidence_score,
+      productivity_score: typeof analysisData.productivity_score === 'number' ? Math.round(analysisData.productivity_score * 100) / 100 : analysisData.productivity_score,
+      confidence_score: typeof analysisData.confidence_score === 'number' ? Math.round(analysisData.confidence_score * 100) / 100 : analysisData.confidence_score,
       detected_apps: analysisData.detected_apps,
       detected_tasks: analysisData.detected_tasks,
       is_blocked: analysisData.is_blocked,
       blocker_type: analysisData.blocker_type,
       model_version: analysisData.model_version,
-      processing_time_ms: analysisData.processing_time_ms
+      processing_time_ms: Math.round(analysisData.processing_time_ms || 0)
     });
   }
 

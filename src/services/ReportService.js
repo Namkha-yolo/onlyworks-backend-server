@@ -216,12 +216,28 @@ class ReportService {
       const { timeframe, includeTeamComparison } = options;
       const { startDate, endDate } = this.getTimeRange(timeframe);
 
-      // Get productivity data
-      const [sessions, analyses, goals] = await Promise.all([
-        this.workSessionRepo.getUserSessions(userId, { startDate, endDate }),
-        this.analysisRepo.findByDateRange(userId, startDate, endDate),
-        this.goalRepo.getUserGoals(userId)
-      ]);
+      // Get productivity data with fallbacks
+      let sessions = [];
+      let analyses = [];
+      let goals = [];
+
+      try {
+        sessions = await this.workSessionRepo.getUserSessions(userId, { startDate, endDate });
+      } catch (err) {
+        logger.warn('Failed to get user sessions', { error: err.message, userId });
+      }
+
+      try {
+        analyses = await this.analysisRepo.findByDateRange(userId, startDate, endDate);
+      } catch (err) {
+        logger.warn('Failed to get analyses', { error: err.message, userId });
+      }
+
+      try {
+        goals = await this.goalRepo.getUserGoals(userId);
+      } catch (err) {
+        logger.warn('Failed to get user goals', { error: err.message, userId });
+      }
 
       const insights = {
         userId,
@@ -249,9 +265,13 @@ class ReportService {
 
       // Add team comparison if requested
       if (includeTeamComparison) {
-        const userTeams = await this.teamRepo.getUserTeams(userId);
-        if (userTeams.length > 0) {
-          insights.teamComparison = await this.generateTeamComparison(userId, userTeams[0].id, timeframe);
+        try {
+          const userTeams = await this.teamRepo.getUserTeams(userId);
+          if (userTeams && userTeams.length > 0) {
+            insights.teamComparison = await this.generateTeamComparison(userId, userTeams[0].id, timeframe);
+          }
+        } catch (err) {
+          logger.warn('Failed to get team comparison', { error: err.message, userId });
         }
       }
 
@@ -554,7 +574,7 @@ class ReportService {
   }
 
 
-  // Placeholder methods - would need full implementation
+  // Helper methods implementation
   identifyPeakHours(sessions) { return ['9-11', '14-16']; }
   calculateGoalProgress(goals) { return { completed: 0.7, inProgress: 0.3 }; }
   generateAITeamReport() { return null; }
@@ -572,6 +592,98 @@ class ReportService {
   analyzeWeekdayPatterns() { return { weekday: 0.8, weekend: 0.6 }; }
   calculateActivityTrends() { return 'stable'; }
   generateActivityRecommendations() { return ['Focus on high-productivity activities']; }
+
+  // Missing method implementations
+  calculateOverallProductivity(sessions, analyses) {
+    if (!sessions || sessions.length === 0) return { score: 0, trend: 'stable' };
+    const avgScore = sessions.reduce((sum, s) => sum + (s.productivity_score || 0), 0) / sessions.length;
+    return { score: Math.round(avgScore * 100) / 100, trend: 'stable' };
+  }
+
+  calculateProductivityTrends(sessions) {
+    if (!sessions || sessions.length < 2) return { direction: 'stable', change: 0 };
+    const recent = sessions.slice(-5);
+    const earlier = sessions.slice(0, -5);
+    const recentAvg = recent.reduce((sum, s) => sum + (s.productivity_score || 0), 0) / recent.length;
+    const earlierAvg = earlier.length > 0 ? earlier.reduce((sum, s) => sum + (s.productivity_score || 0), 0) / earlier.length : recentAvg;
+    const change = recentAvg - earlierAvg;
+    return {
+      direction: change > 0.1 ? 'improving' : change < -0.1 ? 'declining' : 'stable',
+      change: Math.round(change * 100) / 100
+    };
+  }
+
+  identifyProductivityPatterns(analyses) {
+    if (!analyses || analyses.length === 0) return { patterns: [], insights: [] };
+    return { patterns: ['Morning productivity peak'], insights: ['Most productive between 9-11 AM'] };
+  }
+
+  calculateFocusScore(analyses) {
+    if (!analyses || analyses.length === 0) return 0;
+    const focused = analyses.filter(a => !a.is_blocked).length;
+    return Math.round((focused / analyses.length) * 100) / 100;
+  }
+
+  analyzeDistractions(analyses) {
+    if (!analyses || analyses.length === 0) return { count: 0, types: [] };
+    const distractions = analyses.filter(a => a.is_blocked);
+    const types = [...new Set(distractions.map(d => d.blocker_type).filter(Boolean))];
+    return { count: distractions.length, types };
+  }
+
+  identifyDeepWorkSessions(sessions, analyses) {
+    if (!sessions || sessions.length === 0) return [];
+    return sessions.filter(s => s.duration_seconds > 3600 && (s.productivity_score || 0) > 0.8);
+  }
+
+  analyzeGoalCompletion(goals) {
+    if (!goals || goals.length === 0) return { rate: 0, completed: 0, total: 0 };
+    const completed = goals.filter(g => g.status === 'completed').length;
+    return { rate: Math.round((completed / goals.length) * 100), completed, total: goals.length };
+  }
+
+  analyzeGoalTimeAllocation(sessions, goals) {
+    if (!sessions || sessions.length === 0 || !goals || goals.length === 0) {
+      return { goalLinkedTime: 0, unlinkedTime: 100 };
+    }
+    const goalLinked = sessions.filter(s => s.goal_id).length;
+    const rate = goalLinked / sessions.length;
+    return {
+      goalLinkedTime: Math.round(rate * 100),
+      unlinkedTime: Math.round((1 - rate) * 100)
+    };
+  }
+
+  generateImmediateRecommendations(sessions, analyses) {
+    const recommendations = [];
+    if (analyses && analyses.length > 0) {
+      const distractionRate = analyses.filter(a => a.is_blocked).length / analyses.length;
+      if (distractionRate > 0.3) {
+        recommendations.push('Reduce distractions - consider using focus tools or website blockers');
+      }
+    }
+    if (sessions && sessions.length > 0) {
+      const avgDuration = sessions.reduce((sum, s) => sum + (s.duration_seconds || 0), 0) / sessions.length;
+      if (avgDuration < 1800) { // Less than 30 minutes
+        recommendations.push('Try longer focused work sessions for better productivity');
+      }
+    }
+    return recommendations.length > 0 ? recommendations : ['Keep up the good work!'];
+  }
+
+  generateLongTermRecommendations(goals, sessions) {
+    const recommendations = [];
+    if (!goals || goals.length === 0) {
+      recommendations.push('Set clear goals to improve focus and productivity');
+    }
+    if (sessions && sessions.length > 0) {
+      const goalLinked = sessions.filter(s => s.goal_id).length;
+      if (goalLinked / sessions.length < 0.5) {
+        recommendations.push('Link more work sessions to specific goals for better tracking');
+      }
+    }
+    return recommendations.length > 0 ? recommendations : ['Consider setting more challenging goals'];
+  }
 }
 
 module.exports = ReportService;

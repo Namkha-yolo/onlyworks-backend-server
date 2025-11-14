@@ -106,7 +106,7 @@ class AuthService {
         user: {
           id: user.id,
           email: user.email,
-          name: user.display_name,
+          name: user.name, // Use 'name' instead of 'display_name'
           avatar_url: user.avatar_url,
           provider: user.oauth_provider
         }
@@ -236,23 +236,32 @@ class AuthService {
       if (user) {
         // Update existing user
         user = await this.userRepository.update(user.id, {
-          display_name: userInfo.name,
+          name: userInfo.name, // Use 'name' instead of 'display_name'
           avatar_url: userInfo.avatar_url,
           oauth_provider: userInfo.provider,
-          oauth_provider_id: userInfo.provider_id,
+          oauth_id: userInfo.provider_id, // Use 'oauth_id' instead of 'oauth_provider_id'
           email_verified: userInfo.email_verified,
           last_login_at: new Date().toISOString()
         });
       } else {
-        // Create new user
+        // Create new user with default organization assignment
+        const defaultOrganizationId = process.env.DEFAULT_ORGANIZATION_ID || '00000000-0000-0000-0000-000000000001';
+
         user = await this.userRepository.create({
           email: userInfo.email,
-          display_name: userInfo.name,
+          name: userInfo.name, // Use 'name' instead of 'display_name'
           avatar_url: userInfo.avatar_url,
           oauth_provider: userInfo.provider,
-          oauth_provider_id: userInfo.provider_id,
+          oauth_id: userInfo.provider_id, // Use 'oauth_id' instead of 'oauth_provider_id'
           email_verified: userInfo.email_verified,
+          organization_id: defaultOrganizationId,
           status: 'active'
+        });
+
+        logger.info('New user created with organization assignment', {
+          userId: user.id,
+          email: user.email,
+          organizationId: defaultOrganizationId
         });
       }
 
@@ -268,7 +277,7 @@ class AuthService {
       {
         userId: user.id,
         email: user.email,
-        name: user.display_name,
+        name: user.name, // Use 'name' instead of 'display_name'
         avatar_url: user.avatar_url,
         provider: user.oauth_provider
       },

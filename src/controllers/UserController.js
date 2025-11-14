@@ -89,6 +89,36 @@ class UserController {
       message: 'Account reactivated successfully'
     });
   });
+
+  // Get user settings
+  getSettings = asyncHandler(async (req, res) => {
+    const { userId } = req.user;
+
+    logger.info('Getting user settings', { userId });
+
+    const settings = await this.userService.getSettings(userId);
+
+    res.json({
+      success: true,
+      data: settings || {}
+    });
+  });
+
+  // Update user settings
+  updateSettings = asyncHandler(async (req, res) => {
+    const { userId } = req.user;
+    const settingsData = req.body;
+
+    logger.info('Updating user settings', { userId, keys: Object.keys(settingsData) });
+
+    const updatedSettings = await this.userService.updateSettings(userId, settingsData);
+
+    res.json({
+      success: true,
+      data: updatedSettings,
+      message: 'Settings updated successfully'
+    });
+  });
 }
 
 module.exports = UserController;

@@ -613,6 +613,122 @@ class AIAnalysisBacktestService {
       data: this.performanceMetrics
     };
   }
+
+  /**
+   * Analyze confidence correlation with accuracy
+   */
+  async analyzeConfidenceCorrelation(modelResults) {
+    const analysis = {
+      correlation_strength: {},
+      confidence_calibration: {},
+      overconfidence_patterns: {},
+      recommendations: []
+    };
+
+    Object.entries(modelResults).forEach(([modelName, results]) => {
+      const testResults = results.test_results || [];
+
+      if (testResults.length === 0) {
+        analysis.correlation_strength[modelName] = 0;
+        analysis.confidence_calibration[modelName] = 'insufficient_data';
+        return;
+      }
+
+      // Calculate confidence vs accuracy correlation
+      const confidences = testResults.map(test => test.confidence || 0.5);
+      const accuracies = testResults.map(test => test.accuracy_scores?.overall_score || 0);
+
+      const correlation = this.calculateCorrelation(confidences, accuracies);
+      analysis.correlation_strength[modelName] = correlation;
+
+      // Analyze calibration by binning confidence scores
+      const calibrationBins = this.calculateCalibration(confidences, accuracies);
+      analysis.confidence_calibration[modelName] = calibrationBins;
+
+      // Detect overconfidence patterns
+      const overconfident = testResults.filter(test =>
+        (test.confidence || 0.5) > 0.8 && (test.accuracy_scores?.overall_score || 0) < 0.6
+      );
+      analysis.overconfidence_patterns[modelName] = {
+        overconfident_predictions: overconfident.length,
+        overconfidence_rate: overconfident.length / testResults.length,
+        avg_confidence_when_wrong: overconfident.reduce((sum, test) =>
+          sum + (test.confidence || 0), 0) / (overconfident.length || 1)
+      };
+    });
+
+    // Generate recommendations
+    Object.entries(analysis.correlation_strength).forEach(([model, correlation]) => {
+      if (correlation < 0.3) {
+        analysis.recommendations.push({
+          model,
+          type: 'confidence_calibration',
+          severity: 'high',
+          message: 'Poor confidence-accuracy correlation detected',
+          action: 'Implement confidence calibration techniques'
+        });
+      }
+    });
+
+    return analysis;
+  }
+
+  /**
+   * Calculate Pearson correlation coefficient
+   */
+  calculateCorrelation(x, y) {
+    if (x.length !== y.length || x.length === 0) return 0;
+
+    const n = x.length;
+    const sumX = x.reduce((a, b) => a + b, 0);
+    const sumY = y.reduce((a, b) => a + b, 0);
+    const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+    const sumX2 = x.reduce((sum, xi) => sum + xi * xi, 0);
+    const sumY2 = y.reduce((sum, yi) => sum + yi * yi, 0);
+
+    const numerator = n * sumXY - sumX * sumY;
+    const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+    return denominator === 0 ? 0 : numerator / denominator;
+  }
+
+  /**
+   * Calculate confidence calibration bins
+   */
+  calculateCalibration(confidences, accuracies) {
+    const bins = {
+      '0.0-0.2': { predictions: 0, correct: 0, avg_confidence: 0 },
+      '0.2-0.4': { predictions: 0, correct: 0, avg_confidence: 0 },
+      '0.4-0.6': { predictions: 0, correct: 0, avg_confidence: 0 },
+      '0.6-0.8': { predictions: 0, correct: 0, avg_confidence: 0 },
+      '0.8-1.0': { predictions: 0, correct: 0, avg_confidence: 0 }
+    };
+
+    confidences.forEach((conf, i) => {
+      const accuracy = accuracies[i];
+      let binKey;
+
+      if (conf < 0.2) binKey = '0.0-0.2';
+      else if (conf < 0.4) binKey = '0.2-0.4';
+      else if (conf < 0.6) binKey = '0.4-0.6';
+      else if (conf < 0.8) binKey = '0.6-0.8';
+      else binKey = '0.8-1.0';
+
+      bins[binKey].predictions++;
+      bins[binKey].avg_confidence += conf;
+      if (accuracy > 0.7) bins[binKey].correct++;
+    });
+
+    // Calculate averages
+    Object.values(bins).forEach(bin => {
+      if (bin.predictions > 0) {
+        bin.avg_confidence /= bin.predictions;
+        bin.accuracy = bin.correct / bin.predictions;
+      }
+    });
+
+    return bins;
+  }
 }
 
 module.exports = AIAnalysisBacktestService;

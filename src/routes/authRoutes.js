@@ -1,6 +1,6 @@
 const express = require('express');
 const AuthController = require('../controllers/AuthController');
-const { optionalAuth } = require('../middleware/auth');
+const { optionalAuth, authenticateUser } = require('../middleware/auth');
 
 const router = express.Router();
 const authController = new AuthController();
@@ -19,5 +19,8 @@ router.post('/logout', optionalAuth, authController.logout);
 
 // Check auth status
 router.get('/status', optionalAuth, authController.getAuthStatus);
+
+// Validate token endpoint
+router.post('/validate', authenticateUser, authController.validateToken);
 
 module.exports = router;

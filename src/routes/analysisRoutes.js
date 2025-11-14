@@ -93,15 +93,16 @@ router.post('/final', async (req, res) => {
 router.get('/batch/:sessionId', async (req, res) => {
     try {
         const { sessionId } = req.params;
+        const { userId } = req.user; // From auth middleware
         const options = {
             limit: parseInt(req.query.limit) || 50,
             offset: parseInt(req.query.offset) || 0,
             include_results: req.query.include_results !== 'false' // Default true
         };
 
-        console.log(`[AnalysisAPI] Retrieving batch analyses for session ${sessionId}`);
+        console.log(`[AnalysisAPI] Retrieving batch analyses for session ${sessionId}, user ${userId}`);
 
-        const result = await analysisService.getBatchAnalyses(sessionId, options);
+        const result = await analysisService.getBatchAnalyses(sessionId, userId, options);
 
         if (result.success) {
             res.json(result);
@@ -127,10 +128,11 @@ router.get('/batch/:sessionId', async (req, res) => {
 router.get('/final/:sessionId', async (req, res) => {
     try {
         const { sessionId } = req.params;
+        const { userId } = req.user; // From auth middleware
 
-        console.log(`[AnalysisAPI] Retrieving final analysis for session ${sessionId}`);
+        console.log(`[AnalysisAPI] Retrieving final analysis for session ${sessionId}, user ${userId}`);
 
-        const result = await analysisService.getFinalAnalysis(sessionId);
+        const result = await analysisService.getFinalAnalysis(sessionId, userId);
 
         if (result.success) {
             res.json(result);
@@ -156,10 +158,11 @@ router.get('/final/:sessionId', async (req, res) => {
 router.get('/metrics/:sessionId', async (req, res) => {
     try {
         const { sessionId } = req.params;
+        const { userId } = req.user; // From auth middleware
 
-        console.log(`[AnalysisAPI] Retrieving analysis metrics for session ${sessionId}`);
+        console.log(`[AnalysisAPI] Retrieving analysis metrics for session ${sessionId}, user ${userId}`);
 
-        const result = await analysisService.getSessionAnalysisMetrics(sessionId);
+        const result = await analysisService.getSessionAnalysisMetrics(sessionId, userId);
 
         if (result.success) {
             res.json(result);
@@ -184,9 +187,11 @@ router.get('/metrics/:sessionId', async (req, res) => {
  */
 router.get('/sessions', async (req, res) => {
     try {
-        console.log(`[AnalysisAPI] Retrieving all sessions with analysis data`);
+        const { userId } = req.user; // From auth middleware
 
-        const result = await analysisService.getSessionsWithAnalyses();
+        console.log(`[AnalysisAPI] Retrieving all sessions with analysis data for user ${userId}`);
+
+        const result = await analysisService.getSessionsWithAnalyses(userId);
 
         if (result.success) {
             res.json(result);
@@ -211,9 +216,11 @@ router.get('/sessions', async (req, res) => {
  */
 router.get('/stats', async (req, res) => {
     try {
-        console.log(`[AnalysisAPI] Retrieving analysis storage statistics`);
+        const { userId } = req.user; // From auth middleware
 
-        const stats = analysisService.getStorageStats();
+        console.log(`[AnalysisAPI] Retrieving analysis storage statistics for user ${userId}`);
+
+        const stats = await analysisService.getStorageStats(userId);
 
         res.json({
             success: true,

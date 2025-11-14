@@ -24,12 +24,17 @@ class UserRepository extends BaseRepository {
   }
 
   async createUser(userData) {
+    const defaultOrganizationId = process.env.DEFAULT_ORGANIZATION_ID || '00000000-0000-0000-0000-000000000001';
+
     const user = await this.create({
       email: userData.email,
-      display_name: userData.display_name || userData.name,
+      name: userData.name || userData.display_name, // Use 'name' instead of 'display_name'
       avatar_url: userData.avatar_url,
       timezone: userData.timezone || 'UTC',
       email_verified: userData.email_verified || false,
+      organization_id: userData.organization_id || defaultOrganizationId,
+      oauth_provider: userData.oauth_provider,
+      oauth_id: userData.oauth_id || userData.oauth_provider_id, // Use 'oauth_id' instead of 'oauth_provider_id'
       status: 'active'
     });
 
@@ -51,6 +56,46 @@ class UserRepository extends BaseRepository {
 
   async updateStatus(userId, status) {
     return this.update(userId, { status });
+  }
+
+  async getUserSettings(userId) {
+    try {
+      const { data, error } = await this.supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async updateUserSettings(userId, settingsData) {
+    try {
+      const { data, error } = await this.supabase
+        .from('user_settings')
+        .upsert({
+          user_id: userId,
+          settings: settingsData,
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      throw error;
+    }
   }
 }
 

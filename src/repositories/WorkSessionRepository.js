@@ -161,8 +161,100 @@ class WorkSessionRepository extends BaseRepository {
           : 0,
         averageFocusScore: completedSessions.length > 0
           ? completedSessions.reduce((sum, s) => sum + (s.focus_score || 0), 0) / completedSessions.length
+          : 0,
+        averageFocus: completedSessions.length > 0
+          ? completedSessions.reduce((sum, s) => sum + (s.focus_score || 0), 0) / completedSessions.length
           : 0
       };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getUserSessions(userId, options = {}) {
+    try {
+      let query = this.supabase
+        .from(this.tableName)
+        .select('*')
+        .eq('user_id', userId);
+
+      if (options.startDate) {
+        query = query.gte('started_at', options.startDate);
+      }
+
+      if (options.endDate) {
+        query = query.lte('started_at', options.endDate);
+      }
+
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+
+      query = query.order('started_at', { ascending: false });
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getSessionsByIds(sessionIds, userId) {
+    try {
+      const { data, error } = await this.supabase
+        .from(this.tableName)
+        .select('*')
+        .in('id', sessionIds)
+        .eq('user_id', userId);
+
+      if (error) {
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getSessionById(sessionId, userId) {
+    try {
+      const { data, error } = await this.supabase
+        .from(this.tableName)
+        .select('*')
+        .eq('id', sessionId)
+        .eq('user_id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getSessionsByGoalId(goalId, userId) {
+    try {
+      const { data, error } = await this.supabase
+        .from(this.tableName)
+        .select('*')
+        .eq('goal_id', goalId)
+        .eq('user_id', userId)
+        .order('started_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      return data || [];
     } catch (error) {
       throw error;
     }

@@ -132,6 +132,33 @@ class AuthController {
       }
     });
   });
+
+  // Validate token endpoint
+  validateToken = asyncHandler(async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'INVALID_TOKEN',
+          message: 'Token is invalid or expired'
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        valid: true,
+        user: {
+          id: req.user.userId,
+          email: req.user.email,
+          name: req.user.name,
+          avatar_url: req.user.avatar_url,
+          provider: req.user.provider
+        }
+      }
+    });
+  });
 }
 
 module.exports = AuthController;

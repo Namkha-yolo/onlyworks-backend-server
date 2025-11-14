@@ -6,36 +6,45 @@ class ScreenshotRepository extends BaseRepository {
   }
 
   async createScreenshot(userId, sessionId, screenshotData) {
-    return this.create({
+    // Use work_session_id as expected by current database schema
+    const createData = {
       user_id: userId,
       work_session_id: sessionId,
       file_storage_key: screenshotData.file_storage_key,
       file_size_bytes: screenshotData.file_size_bytes,
       timestamp: screenshotData.timestamp || new Date().toISOString(),
-      capture_trigger: screenshotData.capture_trigger || 'timer_15s',
       window_title: screenshotData.window_title,
       active_app: screenshotData.active_app,
-      ocr_text: screenshotData.ocr_text,
-      ai_analysis_completed: false
-    });
+      capture_trigger: screenshotData.capture_trigger || 'timer_15s',
+      mouse_x: screenshotData.mouse_x,
+      mouse_y: screenshotData.mouse_y,
+      screen_width: screenshotData.screen_width,
+      screen_height: screenshotData.screen_height,
+      interaction_type: screenshotData.interaction_type,
+      interaction_data: screenshotData.interaction_data
+    };
+
+    return await this.create(createData);
   }
 
   async findBySession(sessionId, userId) {
-    return this.findByUserId(userId, { work_session_id: sessionId });
+    // Use work_session_id (current database schema)
+    return await this.findByUserId(userId, { work_session_id: sessionId });
   }
 
   async markAnalysisCompleted(screenshotId, userId) {
-    return this.update(screenshotId, {
-      ai_analysis_completed: true
-    }, userId);
+    // ai_analysis_completed column doesn't exist in current schema
+    // This method is disabled until schema is updated
+    console.warn('markAnalysisCompleted: ai_analysis_completed column does not exist in database');
+    return { id: screenshotId, warning: 'ai_analysis_completed column missing' };
   }
 
   async findPendingAnalysis(limit = 10) {
     try {
+      // ai_analysis_completed column doesn't exist, return all screenshots
       const { data, error } = await this.supabase
         .from(this.tableName)
         .select('*')
-        .eq('ai_analysis_completed', false)
         .order('timestamp', { ascending: true })
         .limit(limit);
 
@@ -54,10 +63,11 @@ class ScreenshotRepository extends BaseRepository {
       const expirationDate = new Date();
       expirationDate.setDate(expirationDate.getDate() - retentionDays);
 
+      // retention_expires_at column doesn't exist, use timestamp instead
       const { data, error } = await this.supabase
         .from(this.tableName)
         .select('*')
-        .lte('retention_expires_at', expirationDate.toISOString());
+        .lte('timestamp', expirationDate.toISOString());
 
       if (error) {
         throw error;
@@ -70,9 +80,9 @@ class ScreenshotRepository extends BaseRepository {
   }
 
   async updateOcrText(screenshotId, userId, ocrText) {
-    return this.update(screenshotId, {
-      ocr_text: ocrText
-    }, userId);
+    // ocr_text column doesn't exist in current schema
+    console.warn('updateOcrText: ocr_text column does not exist in database');
+    return { id: screenshotId, warning: 'ocr_text column missing' };
   }
 
   async getSessionScreenshotCount(sessionId) {
@@ -110,9 +120,10 @@ class ScreenshotRepository extends BaseRepository {
       query = query.eq('work_session_id', sessionId);
     }
 
-    if (captureTriger) {
-      query = query.eq('capture_trigger', captureTriger);
-    }
+    // capture_trigger column doesn't exist in current schema
+    // if (captureTriger) {
+    //   query = query.eq('capture_trigger', captureTriger);
+    // }
 
     // Apply pagination
     const {
@@ -134,6 +145,57 @@ class ScreenshotRepository extends BaseRepository {
     }
 
     return data || [];
+  }
+
+  // Get recent screenshots for batch processing
+  async getRecentScreenshots(sessionId, limit = 30) {
+    try {
+      // Use work_session_id and skip ai_analysis_completed filter (column doesn't exist)
+      const { data, error } = await this.supabase
+        .from(this.tableName)
+        .select('*')
+        .eq('work_session_id', sessionId)
+        .order('timestamp', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Mark screenshots as processed after batch analysis
+  async markAsProcessed(screenshotIds, batchReportId = null) {
+    try {
+      // ai_analysis_completed, processed_at, batch_report_id columns don't exist
+      console.warn('markAsProcessed: Required columns do not exist in database schema');
+      return { processed_ids: screenshotIds, warning: 'Analysis tracking columns missing' };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Get count of unprocessed screenshots for a session
+  async getUnprocessedCount(sessionId) {
+    try {
+      // ai_analysis_completed column doesn't exist, return total count for session
+      const { count, error } = await this.supabase
+        .from(this.tableName)
+        .select('*', { count: 'exact', head: true })
+        .eq('work_session_id', sessionId);
+
+      if (error) {
+        throw error;
+      }
+
+      return count || 0;
+    } catch (error) {
+      throw error;
+    }
   }
 }
 

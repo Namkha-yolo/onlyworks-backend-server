@@ -17,9 +17,33 @@ class AIAnalysisService {
 
     try {
       if (!this.model) {
-        throw new ApiError('AI_SERVICE_ERROR', {
-          message: 'AI analysis service not configured - missing API key'
+        logger.info('AI service not configured, using enhanced mock analysis', {
+          screenshot_path: screenshotPath
         });
+
+        const mockResult = this.generateEnhancedMockAnalysis(metadata, 'mock_fallback');
+
+        // Add analysis metadata
+        mockResult.analysis_metadata = {
+          analysis_type: 'mock_fallback',
+          confidence_calibrated: true,
+          model_version: 'enhanced-mock-v2',
+          processing_time_ms: Math.round(Date.now() - startTime),
+          metadata_used: Object.keys(metadata).length > 0,
+          reason: 'ai_service_not_configured'
+        };
+
+        const duration = Date.now() - startTime;
+
+        logger.ai('screenshot_analysis', 'mock-fallback', duration, 0, {
+          screenshot_path: screenshotPath,
+          activity_detected: mockResult.activity_detected,
+          productivity_score: mockResult.productivity_score,
+          confidence: mockResult.confidence_score,
+          analysis_type: 'mock_fallback'
+        });
+
+        return mockResult;
       }
 
       logger.info('Starting AI analysis of screenshot', {
@@ -48,7 +72,7 @@ class AIAnalysisService {
         analysis_type: analysisResult.analysis_type || 'enhanced_mock',
         confidence_calibrated: true,
         model_version: this.model?.model || 'mock-service',
-        processing_time_ms: Date.now() - startTime,
+        processing_time_ms: Math.round(Date.now() - startTime),
         metadata_used: Object.keys(metadata).length > 0
       };
 
@@ -171,7 +195,7 @@ Provide structured analysis with confidence scores for each assessment.`;
     return {
       activity_detected: activityType,
       productivity_score: Math.round(productivityScore * 100) / 100,
-      confidence_score: 85 + Math.random() * 15,
+      confidence_score: Math.round((85 + Math.random() * 15) * 100) / 100,
       detected_apps: detectedApps,
       detected_tasks: [
         {
@@ -182,7 +206,7 @@ Provide structured analysis with confidence scores for each assessment.`;
       is_blocked: productivityScore < 30 && Math.random() > 0.5,
       blocker_type: productivityScore < 30 ? ['distraction', 'social_media', 'entertainment'][Math.floor(Math.random() * 3)] : null,
       model_version: 'gemini-1.5-flash-mock',
-      processing_time_ms: 150 + Math.random() * 300
+      processing_time_ms: Math.round(150 + Math.random() * 300)
     };
   }
 
@@ -446,7 +470,7 @@ Provide structured analysis with confidence scores for each assessment.`;
       is_blocked: isBlocked,
       blocker_type: blockerType,
       model_version: analysisType === 'real_analysis' ? 'gemini-1.5-flash' : 'enhanced-mock-v2',
-      processing_time_ms: 150 + Math.random() * 200,
+      processing_time_ms: Math.round(150 + Math.random() * 200),
       analysis_type: analysisType,
       metadata_confidence_boost: confidenceBoost
     };

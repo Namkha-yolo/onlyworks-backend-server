@@ -15,8 +15,7 @@ const enhancedStorage = new EnhancedScreenshotStorageService();
  */
 router.post('/enhanced/upload', authenticateUser, asyncHandler(async (req, res) => {
   const { userId } = req.user;
-  const { sessionId } = req.params;
-  const screenshotData = req.body;
+  const { sessionId, ...screenshotData } = req.body;
 
   logger.info('Enhanced screenshot upload requested', {
     userId,
