@@ -179,9 +179,38 @@ class ScreenshotRepository extends BaseRepository {
     }
   }
 
-  async findBySession(sessionId, userId) {
+  async findBySession(sessionId, userId, options = {}) {
     // Use session_id (actual database schema)
-    return await this.findByUserId(userId, { session_id: sessionId });
+    const filters = { session_id: sessionId };
+
+    // If limit is provided, use direct query instead of findByUserId
+    if (options.limit) {
+      try {
+        let query = this.supabase
+          .from(this.tableName)
+          .select('*')
+          .eq('session_id', sessionId)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+
+        if (options.limit) {
+          query = query.limit(options.limit);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          throw error;
+        }
+
+        return data || [];
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    // Fallback to findByUserId for compatibility
+    return await this.findByUserId(userId, filters);
   }
 
   async markAnalysisCompleted(screenshotId, userId) {
