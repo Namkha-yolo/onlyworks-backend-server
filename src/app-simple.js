@@ -654,6 +654,7 @@ app.post('/api/auth/oauth/google/callback', async (req, res) => {
     // Generate JWT token for your app (you'd implement proper JWT here)
     const appToken = 'jwt-' + userData.id + '-' + Date.now();
 
+    console.log('[OAuth Callback] Sending successful response to client...');
     res.json({
       success: true,
       data: {
@@ -661,10 +662,11 @@ app.post('/api/auth/oauth/google/callback', async (req, res) => {
           id: userData.id,
           email: userData.email,
           name: userData.name,
-          avatar: userData.picture
+          avatar_url: userData.picture
         },
-        token: appToken,
-        expiresIn: 3600
+        access_token: appToken,
+        refresh_token: 'refresh-' + userData.id + '-' + Date.now(),
+        expires_in: 3600
       },
       message: 'OAuth callback successful'
     });
