@@ -7,20 +7,18 @@ class BatchReportRepository {
   }
 
   async create(batchReportData) {
-    // Support both old and new schema structures
     const {
       session_id,
       user_id,
       screenshot_count,
-      analysis_type,
+      analysis_type = 'standard',
       analysis_result,
       created_at,
-      // New schema fields
       batch_number,
       screenshot_ids,
       start_time,
       end_time,
-      processing_status,
+      processing_status = 'completed',
       gemini_analysis,
       efficiency_score,
       inefficiency_score,
@@ -31,17 +29,17 @@ class BatchReportRepository {
       processed_at
     } = batchReportData;
 
-    // Build insert object based on available fields
     const insertData = {
       id: uuidv4(),
       session_id,
       user_id,
       screenshot_count: screenshot_count || 0,
+      analysis_type,
       created_at: created_at || new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
 
-    // Add fields based on your existing schema
+    // Add optional fields
     if (batch_number !== undefined) insertData.batch_number = batch_number;
     if (screenshot_ids !== undefined) insertData.screenshot_ids = screenshot_ids;
     if (start_time !== undefined) insertData.start_time = start_time;
@@ -52,22 +50,13 @@ class BatchReportRepository {
     }
     if (efficiency_score !== undefined) insertData.efficiency_score = efficiency_score;
     if (inefficiency_score !== undefined) insertData.inefficiency_score = inefficiency_score;
-    if (tasks_identified !== undefined) {
-      insertData.tasks_identified = Array.isArray(tasks_identified) ? tasks_identified : [];
-    }
-    if (tasks_completed !== undefined) {
-      insertData.tasks_completed = Array.isArray(tasks_completed) ? tasks_completed : [];
-    }
-    if (applications_used !== undefined) {
-      insertData.applications_used = Array.isArray(applications_used) ? applications_used : [];
-    }
+    if (tasks_identified !== undefined) insertData.tasks_identified = tasks_identified;
+    if (tasks_completed !== undefined) insertData.tasks_completed = tasks_completed;
+    if (applications_used !== undefined) insertData.applications_used = applications_used;
     if (activities !== undefined) {
       insertData.activities = typeof activities === 'string' ? activities : JSON.stringify(activities);
     }
     if (processed_at !== undefined) insertData.processed_at = processed_at;
-
-    // Legacy support
-    if (analysis_type !== undefined) insertData.analysis_type = analysis_type;
     if (analysis_result !== undefined) {
       insertData.analysis_result = typeof analysis_result === 'string' ? analysis_result : JSON.stringify(analysis_result);
     }
@@ -134,7 +123,7 @@ class BatchReportRepository {
 
     if (error) {
       if (error.code === 'PGRST116') {
-        return null; // Not found
+        return null;
       }
       throw new Error(`Failed to find batch report: ${error.message}`);
     }
@@ -187,7 +176,7 @@ class BatchReportRepository {
 
     if (error) {
       if (error.code === 'PGRST116') {
-        return null; // Not found or no permission
+        return null;
       }
       throw new Error(`Failed to delete batch report: ${error.message}`);
     }
@@ -222,7 +211,7 @@ class BatchReportRepository {
     return stats;
   }
 
-  // Create shareable report
+  // Shared reports functionality
   async createShareableReport(shareData) {
     const { session_id, user_id, share_token, summary_data, expires_at, include_private_data, share_with_team } = shareData;
 
@@ -249,7 +238,6 @@ class BatchReportRepository {
     return data;
   }
 
-  // Get shared report by token
   async getByShareToken(shareToken) {
     const { data, error } = await supabaseAdmin
       .from('shared_reports')
@@ -259,7 +247,7 @@ class BatchReportRepository {
 
     if (error) {
       if (error.code === 'PGRST116') {
-        return null; // Not found
+        return null;
       }
       throw new Error(`Failed to get shared report: ${error.message}`);
     }
@@ -271,7 +259,6 @@ class BatchReportRepository {
     };
   }
 
-  // Delete shared report
   async deleteSharedReport(shareToken, userId) {
     const { data, error } = await supabaseAdmin
       .from('shared_reports')
@@ -283,7 +270,7 @@ class BatchReportRepository {
 
     if (error) {
       if (error.code === 'PGRST116') {
-        return null; // Not found or no permission
+        return null;
       }
       throw new Error(`Failed to delete shared report: ${error.message}`);
     }
@@ -291,7 +278,6 @@ class BatchReportRepository {
     return data;
   }
 
-  // Get user's shared reports
   async getUserSharedReports(userId, options = {}) {
     const { limit = 20, offset = 0 } = options;
 
@@ -313,7 +299,6 @@ class BatchReportRepository {
     }));
   }
 
-  // Clean up expired shared reports (should be called periodically)
   async cleanupExpiredReports() {
     const { data, error } = await supabaseAdmin
       .from('shared_reports')
