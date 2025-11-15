@@ -24,26 +24,35 @@ class ScreenshotRepository extends BaseRepository {
       return actionType;
     }
 
-    // Map common test/invalid values to valid ones
+    // Map frontend trigger types and test values to valid database ENUM values
     const actionTypeMapping = {
-      'emergency_test': 'manual',
-      'schema_test': 'manual',
-      'test': 'manual',
-      'schema_compliance_test': 'manual',
-      'emergency_conflict_test': 'manual',
-      'conflict_test': 'manual',
-      'upload_test': 'manual',
-      'test_upload': 'manual'
+      // Frontend desktop app trigger types
+      'enter_key': 'enter',
+      'cmd_c': 'copy',
+      'cmd_v': 'paste',
+      'keypress': 'keyboard',
+      'window_switch': 'auto',
+      'tab_switch': 'auto',
+
+      // Test values
+      'emergency_test': 'auto',
+      'schema_test': 'auto',
+      'test': 'auto',
+      'schema_compliance_test': 'auto',
+      'emergency_conflict_test': 'auto',
+      'conflict_test': 'auto',
+      'upload_test': 'auto',
+      'test_upload': 'auto'
     };
 
     if (actionType && actionTypeMapping[actionType]) {
-      console.log(`📝 Mapped invalid action_type '${actionType}' to '${actionTypeMapping[actionType]}'`);
+      console.log(`📝 Mapped action_type '${actionType}' to '${actionTypeMapping[actionType]}'`);
       return actionTypeMapping[actionType];
     }
 
-    // Default fallback
-    console.log(`⚠️ Unknown action_type '${actionType}', using default 'manual'`);
-    return 'manual';
+    // Default fallback - use 'auto' instead of 'manual' for automated captures
+    console.log(`⚠️ Unknown action_type '${actionType}', using default 'auto'`);
+    return 'auto';
   }
 
   async createScreenshot(userId, sessionId, screenshotData) {
@@ -188,7 +197,7 @@ class ScreenshotRepository extends BaseRepository {
       const { data, error } = await this.supabase
         .from(this.tableName)
         .select('*')
-        .order('timestamp', { ascending: true })
+        .order('created_at', { ascending: true })
         .limit(limit);
 
       if (error) {
@@ -206,11 +215,11 @@ class ScreenshotRepository extends BaseRepository {
       const expirationDate = new Date();
       expirationDate.setDate(expirationDate.getDate() - retentionDays);
 
-      // retention_expires_at column doesn't exist, use timestamp instead
+      // retention_expires_at column doesn't exist, use created_at instead
       const { data, error } = await this.supabase
         .from(this.tableName)
         .select('*')
-        .lte('timestamp', expirationDate.toISOString());
+        .lte('created_at', expirationDate.toISOString());
 
       if (error) {
         throw error;
@@ -256,8 +265,8 @@ class ScreenshotRepository extends BaseRepository {
       .from(this.tableName)
       .select('*')
       .eq('user_id', userId)
-      .gte('timestamp', startTime)
-      .lte('timestamp', endTime);
+      .gte('created_at', startTime)
+      .lte('created_at', endTime);
 
     if (sessionId) {
       query = query.eq('session_id', sessionId);
@@ -272,7 +281,7 @@ class ScreenshotRepository extends BaseRepository {
     const {
       page = 1,
       limit = 50,
-      orderBy = 'timestamp',
+      orderBy = 'created_at',
       orderDirection = 'desc'
     } = paginationOptions;
 
@@ -298,7 +307,7 @@ class ScreenshotRepository extends BaseRepository {
         .from(this.tableName)
         .select('*')
         .eq('session_id', sessionId)
-        .order('timestamp', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(limit);
 
       if (error) {
