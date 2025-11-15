@@ -151,33 +151,68 @@ class BatchProcessingService {
       activeApp: screenshot.active_app || 'Unknown'
     }));
 
+    // Calculate timing patterns for better analysis
+    const timeSpans = [];
+    for (let i = 1; i < screenshotInfo.length; i++) {
+      const prevTime = new Date(screenshotInfo[i-1].timestamp);
+      const currTime = new Date(screenshotInfo[i].timestamp);
+      timeSpans.push(Math.round((currTime - prevTime) / 1000)); // seconds
+    }
+
+    const avgInterval = timeSpans.length > 0 ? Math.round(timeSpans.reduce((a, b) => a + b, 0) / timeSpans.length) : 0;
+    const uniqueApps = [...new Set(screenshotInfo.map(s => s.activeApp).filter(app => app !== 'Unknown'))];
+    const triggerCounts = screenshotInfo.reduce((acc, s) => {
+      acc[s.captureTriger] = (acc[s.captureTriger] || 0) + 1;
+      return acc;
+    }, {});
+
+    const hasAppData = uniqueApps.length > 0;
+    const sessionDuration = screenshotInfo.length > 1
+      ? Math.round((new Date(screenshotInfo[screenshotInfo.length-1].timestamp) - new Date(screenshotInfo[0].timestamp)) / 1000 / 60)
+      : 0;
+
     return `
-Analyze this batch of ${screenshots.length} screenshots from a work session.
+Analyze this productivity work session with ${screenshots.length} screenshots over ${sessionDuration} minutes.
 
-Screenshot Information:
-${screenshotInfo.map(info =>
-  `${info.index}. Time: ${info.timestamp}, Trigger: ${info.captureTriger}, App: ${info.activeApp}`
-).join('\\n')}
+Session Data:
+- Average screenshot interval: ${avgInterval} seconds
+- Capture triggers: ${Object.entries(triggerCounts).map(([k,v]) => `${k}: ${v}`).join(', ')}
+- Applications detected: ${hasAppData ? uniqueApps.join(', ') : 'Unknown (app detection unavailable)'}
+- Session duration: ${sessionDuration} minutes
 
-Based on the screenshot metadata, provide analysis in the following JSON format:
+Screenshot Timeline:
+${screenshotInfo.map((info, i) => {
+  const interval = i > 0 ? timeSpans[i-1] + 's' : '0s';
+  return `${info.index}. [+${interval}] ${info.captureTriger} → ${info.activeApp}`;
+}).join('\\n')}
+
+Analysis Instructions:
+${hasAppData
+  ? 'Focus on application-based productivity patterns and task switching behavior.'
+  : 'Since application data is unavailable, focus on activity patterns based on timing, triggers, and user behavior.'
+}
+
+Provide analysis as JSON:
 {
-  "summary": "Brief overview of the work session activity",
+  "summary": "Comprehensive analysis of work patterns, productivity, and session characteristics",
   "productivityMetrics": {
     "focusScore": 0.0-1.0,
     "distractionEvents": number,
     "taskSwitching": number
   },
   "activityBreakdown": {
-    "primaryApplications": ["app1", "app2"],
-    "workPatterns": "description of work patterns"
+    "primaryApplications": [${hasAppData ? '"detected apps"' : '"Activity based on patterns"'}],
+    "workPatterns": "Detailed description of work rhythm, intensity, and engagement patterns"
   },
   "insights": [
-    "Key insight 1",
-    "Key insight 2"
+    "Pattern-based insights about focus and productivity",
+    "Activity rhythm and engagement analysis",
+    "Work intensity and consistency observations"
   ],
   "recommendations": [
-    "Actionable recommendation 1",
-    "Actionable recommendation 2"
+    "Actionable suggestions based on observed patterns",
+    "Specific improvements for focus and productivity",
+    "Technical suggestions (e.g., enable app detection for better insights)"
   ]
 }`;
   }
