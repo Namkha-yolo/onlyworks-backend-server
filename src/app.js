@@ -25,7 +25,6 @@ const backtestRoutes = require('./routes/backtestRoutes');
 const batchProcessingRoutes = require('./routes/batchProcessingRoutes');
 const userSessionRoutes = require('./routes/userSessionRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
-const aiRoutes = require('./routes/aiRoutes');
 
 const app = express();
 
@@ -108,7 +107,6 @@ app.use('/api/backtest', backtestRoutes);
 app.use('/api/batch', batchProcessingRoutes);
 app.use('/api/user-session', userSessionRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api/ai', aiRoutes);
 
 // Root health check routes (for monitoring/load balancers)
 app.get('/', (req, res) => {
