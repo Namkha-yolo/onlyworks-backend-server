@@ -6,14 +6,12 @@ class ScreenshotRepository extends BaseRepository {
   }
 
   async createScreenshot(userId, sessionId, screenshotData) {
-    // Use work_session_id as expected by current database schema
+    // Match actual database schema: session_id, storage_path, metadata
     const createData = {
       user_id: userId,
-      work_session_id: sessionId,
-      file_storage_key: screenshotData.file_storage_key,
+      session_id: sessionId,
+      storage_path: screenshotData.file_storage_key || screenshotData.storage_path,
       file_size_bytes: screenshotData.file_size_bytes,
-      timestamp: screenshotData.timestamp || new Date().toISOString(),
-      window_title: screenshotData.window_title,
       active_app: screenshotData.active_app,
       capture_trigger: screenshotData.capture_trigger || 'timer_15s',
       mouse_x: screenshotData.mouse_x,
@@ -21,15 +19,19 @@ class ScreenshotRepository extends BaseRepository {
       screen_width: screenshotData.screen_width,
       screen_height: screenshotData.screen_height,
       interaction_type: screenshotData.interaction_type,
-      interaction_data: screenshotData.interaction_data
+      interaction_data: screenshotData.interaction_data,
+      metadata: {
+        window_title: screenshotData.window_title,
+        timestamp: screenshotData.timestamp || new Date().toISOString(),
+        ...screenshotData.metadata
+      }
     };
 
     return await this.create(createData);
   }
 
   async findBySession(sessionId, userId) {
-    // Use work_session_id (current database schema)
-    return await this.findByUserId(userId, { work_session_id: sessionId });
+    return await this.findByUserId(userId, { session_id: sessionId });
   }
 
   async markAnalysisCompleted(screenshotId, userId) {
@@ -90,7 +92,7 @@ class ScreenshotRepository extends BaseRepository {
       const { count, error } = await this.supabase
         .from(this.tableName)
         .select('*', { count: 'exact', head: true })
-        .eq('work_session_id', sessionId);
+        .eq('session_id', sessionId);
 
       if (error) {
         throw error;
@@ -113,11 +115,11 @@ class ScreenshotRepository extends BaseRepository {
       .from(this.tableName)
       .select('*')
       .eq('user_id', userId)
-      .gte('timestamp', startTime)
-      .lte('timestamp', endTime);
+      .gte('created_at', startTime)
+      .lte('created_at', endTime);
 
     if (sessionId) {
-      query = query.eq('work_session_id', sessionId);
+      query = query.eq('session_id', sessionId);
     }
 
     // capture_trigger column doesn't exist in current schema
@@ -129,7 +131,7 @@ class ScreenshotRepository extends BaseRepository {
     const {
       page = 1,
       limit = 50,
-      orderBy = 'timestamp',
+      orderBy = 'created_at',
       orderDirection = 'desc'
     } = paginationOptions;
 
@@ -150,12 +152,11 @@ class ScreenshotRepository extends BaseRepository {
   // Get recent screenshots for batch processing
   async getRecentScreenshots(sessionId, limit = 30) {
     try {
-      // Use work_session_id and skip ai_analysis_completed filter (column doesn't exist)
       const { data, error } = await this.supabase
         .from(this.tableName)
         .select('*')
-        .eq('work_session_id', sessionId)
-        .order('timestamp', { ascending: false })
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
         .limit(limit);
 
       if (error) {
@@ -186,7 +187,7 @@ class ScreenshotRepository extends BaseRepository {
       const { count, error } = await this.supabase
         .from(this.tableName)
         .select('*', { count: 'exact', head: true })
-        .eq('work_session_id', sessionId);
+        .eq('session_id', sessionId);
 
       if (error) {
         throw error;
