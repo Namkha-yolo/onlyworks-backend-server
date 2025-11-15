@@ -8,6 +8,19 @@ This directory contains SQL migrations to unify the user data model and fix fore
 
 The database had duplicate user tables (`users` and `profiles`) with foreign keys pointing to `profiles`, but the backend code was creating users in the `users` table. This caused FK constraint failures when creating screenshots, sessions, etc.
 
+## ⚠️ CRITICAL: If You Already Ran Migration 002
+
+If you tried to run `002_update_foreign_keys_to_users.sql` and got an FK constraint error, you need to rollback first:
+
+```sql
+-- Run the rollback script
+\i migrations/000_rollback_002_if_needed.sql
+```
+
+This will restore all FKs back to `profiles` so you can run migrations in the correct order.
+
+---
+
 ## Migration Order
 
 **IMPORTANT:** Run migrations in this exact order:
@@ -26,13 +39,15 @@ The database had duplicate user tables (`users` and `profiles`) with foreign key
 \i migrations/001_enhance_users_table.sql
 ```
 
-### 2. `003_migrate_profiles_to_users.sql`
+### 2. `003_migrate_profiles_to_users.sql` ⚠️ **RUN THIS BEFORE 002!**
 **Purpose:** Migrate data from `profiles` to `users` table
 
 **What it does:**
-- Copies all profile data to users table
+- Copies all profile data to users table (including user c032430f-15c5-408e-bfdb-47086e982b70)
 - Merges data for users that exist in both tables
 - Verifies migration completeness
+
+**WHY RUN THIS SECOND:** Migration 002 updates FKs to point to `users` table. But if user data isn't in `users` yet, FK constraints will fail. This migration ensures all user IDs exist in `users` BEFORE FKs are updated.
 
 **Run this second:**
 ```sql
