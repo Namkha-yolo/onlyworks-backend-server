@@ -132,9 +132,12 @@ class AuthService {
     const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.BASE_URL}/api/auth/oauth/google/callback`;
     logger.info('Exchanging code for tokens', {
       clientId: clientId?.substring(0, 20) + '...',
+      clientSecret: clientSecret?.substring(0, 10) + '...',
       redirectUri,
       codeLength: code?.length,
-      hasClientSecret: !!clientSecret
+      baseUrl: process.env.BASE_URL,
+      hasClientSecret: !!clientSecret,
+      envGoogleRedirectUri: process.env.GOOGLE_REDIRECT_URI
     });
 
     // Exchange code for tokens
