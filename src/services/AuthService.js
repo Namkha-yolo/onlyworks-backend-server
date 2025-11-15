@@ -97,7 +97,8 @@ class AuthService {
       logger.info('User authenticated successfully', {
         userId: user.id,
         email: user.email,
-        provider
+        provider,
+        timestamp: new Date().toISOString()
       });
 
       return {
@@ -127,6 +128,15 @@ class AuthService {
       throw new ApiError('OAUTH_NOT_CONFIGURED', { provider: 'google' });
     }
 
+    // Log the parameters being sent to Google
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.BASE_URL}/api/auth/oauth/google/callback`;
+    logger.info('Exchanging code for tokens', {
+      clientId: clientId?.substring(0, 20) + '...',
+      redirectUri,
+      codeLength: code?.length,
+      hasClientSecret: !!clientSecret
+    });
+
     // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -136,11 +146,16 @@ class AuthService {
         client_secret: clientSecret,
         code,
         grant_type: 'authorization_code',
-        redirect_uri: process.env.GOOGLE_REDIRECT_URI || `${process.env.BASE_URL}/api/auth/oauth/google/callback`
+        redirect_uri: redirectUri
       })
     });
 
     const tokens = await tokenResponse.json();
+    logger.info('Google token response', {
+      status: tokenResponse.status,
+      hasAccessToken: !!tokens.access_token,
+      error: tokens.error
+    });
 
     if (!tokenResponse.ok) {
       throw new ApiError('OAUTH_TOKEN_EXCHANGE_FAILED', {
