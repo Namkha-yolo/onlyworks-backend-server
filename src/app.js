@@ -12,6 +12,7 @@ const { checkDatabaseConnection } = require('./config/database');
 const authRoutes = require('./routes/authRoutes');
 const desktopOAuthRoutes = require('./routes/desktopOAuthRoutes');
 const userRoutes = require('./routes/userRoutes');
+const onboardingRoutes = require('./routes/onboardingRoutes');
 const workSessionRoutes = require('./routes/workSessionRoutes');
 const screenshotRoutes = require('./routes/screenshotRoutes');
 const enhancedScreenshotRoutes = require('./routes/enhancedScreenshotRoutes');
@@ -93,6 +94,7 @@ app.get('/health', async (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/oauth', desktopOAuthRoutes); // Desktop OAuth routes
 app.use('/api/users', userRoutes);
+app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/sessions', workSessionRoutes);
 app.use('/api/screenshots', screenshotRoutes);
 app.use('/api/screenshots', enhancedScreenshotRoutes);

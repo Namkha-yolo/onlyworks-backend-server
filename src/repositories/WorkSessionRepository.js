@@ -2,7 +2,7 @@ const BaseRepository = require('./BaseRepository');
 
 class WorkSessionRepository extends BaseRepository {
   constructor() {
-    super('work_sessions');
+    super('screenshot_sessions');
   }
 
   async findActiveSession(userId) {
