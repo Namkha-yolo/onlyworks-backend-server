@@ -210,10 +210,11 @@ app.post('/api/test/upload', upload.single('screenshot'), async (req, res) => {
     const testUserId = 'test-user-emergency-123';
     const testSessionId = sessionId || 'test-session-emergency-123';
 
-    // Generate unique filename
+    // Generate unique filename for JPEG
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).substring(2, 8);
-    const fileName = `test_emergency_${timestamp}_${randomId}.png`;
+    const fileExtension = uploadedFile.mimetype === 'image/jpeg' ? 'jpg' : 'jpg'; // Default to JPEG
+    const fileName = `test_emergency_${timestamp}_${randomId}.${fileExtension}`;
 
     // Upload file to storage
     const uploadResult = await fileStorage.uploadFile(

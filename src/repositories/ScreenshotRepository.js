@@ -59,7 +59,7 @@ class ScreenshotRepository extends BaseRepository {
       file_path: screenshotData.file_path, // Add missing file_path field
       storage_path: screenshotData.storage_path, // Add missing storage_path field
       file_size: screenshotData.file_size_bytes, // Map to both file_size and file_size_bytes
-      file_type: screenshotData.file_type || 'image/png',
+      file_type: screenshotData.file_type || 'image/jpeg',
 
       // Required action_type field (NOT NULL ENUM in schema)
       // Valid values: manual, click, copy, paste, timer, interval

@@ -31,10 +31,12 @@ class ScreenshotController {
 
     // Handle file upload if present
     if (uploadedFile) {
-      // Generate unique filename to prevent conflicts
+      // Generate unique filename to prevent conflicts - prefer JPEG for efficiency
       const timestamp = Date.now();
       const randomId = Math.random().toString(36).substring(2, 8);
-      const fileName = `screenshot_${timestamp}_${randomId}.${uploadedFile.mimetype.split('/')[1]}`;
+      const fileExtension = uploadedFile.mimetype === 'image/jpeg' ? 'jpg' :
+                           uploadedFile.mimetype === 'image/png' ? 'png' : 'jpg';
+      const fileName = `screenshot_${timestamp}_${randomId}.${fileExtension}`;
 
       const uploadResult = await this.fileStorage.uploadFile(
         uploadedFile.buffer,
