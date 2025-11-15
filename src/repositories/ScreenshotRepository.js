@@ -17,8 +17,11 @@ class ScreenshotRepository extends BaseRepository {
       window_title: screenshotData.window_title,
       active_app: screenshotData.active_app,
       capture_trigger: screenshotData.capture_trigger || 'timer_15s',
-      mouse_x: screenshotData.mouse_x,
-      mouse_y: screenshotData.mouse_y,
+      mouse_x: screenshotData.click_x || screenshotData.mouse_x,
+      mouse_y: screenshotData.click_y || screenshotData.mouse_y,
+      click_coordinates: screenshotData.click_x && screenshotData.click_y
+        ? { x: parseInt(screenshotData.click_x), y: parseInt(screenshotData.click_y) }
+        : null,
       screen_width: screenshotData.screen_width,
       screen_height: screenshotData.screen_height,
       interaction_type: screenshotData.interaction_type,
@@ -91,7 +94,7 @@ class ScreenshotRepository extends BaseRepository {
       const { count, error } = await this.supabase
         .from(this.tableName)
         .select('*', { count: 'exact', head: true })
-        .eq('work_session_id', sessionId);
+        .eq('session_id', sessionId);
 
       if (error) {
         throw error;
@@ -118,7 +121,7 @@ class ScreenshotRepository extends BaseRepository {
       .lte('timestamp', endTime);
 
     if (sessionId) {
-      query = query.eq('work_session_id', sessionId);
+      query = query.eq('session_id', sessionId);
     }
 
     // capture_trigger column doesn't exist in current schema
@@ -151,11 +154,11 @@ class ScreenshotRepository extends BaseRepository {
   // Get recent screenshots for batch processing
   async getRecentScreenshots(sessionId, limit = 30) {
     try {
-      // Use work_session_id and skip ai_analysis_completed filter (column doesn't exist)
+      // Use session_id and skip ai_analysis_completed filter (column doesn't exist)
       const { data, error } = await this.supabase
         .from(this.tableName)
         .select('*')
-        .eq('work_session_id', sessionId)
+        .eq('session_id', sessionId)
         .order('timestamp', { ascending: false })
         .limit(limit);
 
@@ -187,7 +190,7 @@ class ScreenshotRepository extends BaseRepository {
       const { count, error } = await this.supabase
         .from(this.tableName)
         .select('*', { count: 'exact', head: true })
-        .eq('work_session_id', sessionId);
+        .eq('session_id', sessionId);
 
       if (error) {
         throw error;
