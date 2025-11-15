@@ -184,6 +184,92 @@ app.get('/api/test/session-stats', async (req, res) => {
   });
 });
 
+// Emergency test upload endpoint (no auth required for testing)
+app.post('/api/test/upload', upload.single('screenshot'), async (req, res) => {
+  try {
+    const ScreenshotRepository = require('./repositories/ScreenshotRepository');
+    const FileStorageService = require('./services/FileStorageService');
+
+    const screenshotRepository = new ScreenshotRepository();
+    const fileStorage = new FileStorageService();
+
+    const { sessionId, ...screenshotData } = req.body;
+    const uploadedFile = req.file;
+
+    console.log('🧪 TEST UPLOAD - File received:', uploadedFile?.originalname);
+    console.log('🧪 TEST UPLOAD - Metadata:', screenshotData);
+
+    if (!uploadedFile) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded'
+      });
+    }
+
+    // Use test user ID for testing
+    const testUserId = 'test-user-emergency-123';
+    const testSessionId = sessionId || 'test-session-emergency-123';
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 8);
+    const fileName = `test_emergency_${timestamp}_${randomId}.png`;
+
+    // Upload file to storage
+    const uploadResult = await fileStorage.uploadFile(
+      uploadedFile.buffer,
+      fileName,
+      {
+        contentType: uploadedFile.mimetype,
+        userId: testUserId,
+        sessionId: testSessionId
+      }
+    );
+
+    if (!uploadResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'File upload failed: ' + uploadResult.error
+      });
+    }
+
+    // Create screenshot record with emergency fixes
+    const finalScreenshotData = {
+      ...screenshotData,
+      file_storage_key: uploadResult.data.path,
+      file_size_bytes: uploadedFile.size,
+      public_url: uploadResult.data.publicUrl,
+      action_type: screenshotData.action_type || 'emergency_test',
+      timestamp: screenshotData.timestamp || new Date().toISOString()
+    };
+
+    console.log('🧪 TEST UPLOAD - Creating screenshot record with data:', finalScreenshotData);
+
+    const screenshot = await screenshotRepository.createScreenshot(testUserId, testSessionId, finalScreenshotData);
+
+    console.log('🧪 TEST UPLOAD - Screenshot created successfully:', screenshot.id);
+
+    res.status(201).json({
+      success: true,
+      data: screenshot,
+      message: 'Emergency test upload successful',
+      fileInfo: {
+        originalName: uploadedFile.originalname,
+        size: uploadedFile.size,
+        storageKey: uploadResult.data.path
+      }
+    });
+
+  } catch (error) {
+    console.error('🧪 TEST UPLOAD - Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      details: 'Emergency test upload failed'
+    });
+  }
+});
+
 // Root health check routes (for monitoring/load balancers)
 app.get('/', (req, res) => {
   res.json({
