@@ -279,15 +279,37 @@ class ScreenshotController {
   // Helper method to queue screenshot for analysis
   async queueForAnalysis(screenshotId, storageKey) {
     try {
-      // In a production system, you'd queue this for background processing
-      // For now, we'll just log that it should be analyzed
       logger.info('Queuing screenshot for AI analysis', { screenshotId, storageKey });
 
-      // You could implement a job queue here using services like:
-      // - Bull Queue (Redis-based)
-      // - AWS SQS
-      // - Google Cloud Tasks
-      // - Or a simple database-based queue
+      // Trigger immediate individual analysis for each screenshot
+      // This ensures analysis happens even when batch threshold isn't reached
+      try {
+        const screenshot = await this.screenshotRepository.findById(screenshotId);
+        if (screenshot && storageKey) {
+          const analysisResult = await this.aiService.analyzeScreenshot(storageKey, {
+            window_title: screenshot.metadata?.window_title,
+            active_app: screenshot.metadata?.active_app || screenshot.active_app,
+            timestamp: screenshot.timestamp
+          });
+
+          // Store individual analysis results
+          if (analysisResult) {
+            await this.analysisRepository.createAnalysis(screenshotId, screenshot.user_id, analysisResult);
+            await this.screenshotRepository.markAnalysisCompleted(screenshotId, screenshot.user_id);
+
+            logger.info('Screenshot analyzed successfully', {
+              screenshotId,
+              activityDetected: analysisResult.activity_detected,
+              productivityScore: analysisResult.productivity_score
+            });
+          }
+        }
+      } catch (analysisError) {
+        logger.warn('Individual screenshot analysis failed, will be included in batch processing', {
+          screenshotId,
+          error: analysisError.message
+        });
+      }
 
     } catch (error) {
       logger.error('Failed to queue screenshot for analysis', {
