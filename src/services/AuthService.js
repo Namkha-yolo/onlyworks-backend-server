@@ -292,13 +292,14 @@ class AuthService {
 
   async createOrUpdateUser(userInfo) {
     try {
-      logger.info('Looking for existing user by email', {
+      logger.info('Processing OAuth user login/registration', {
         email: userInfo.email?.substring(0, 10) + '...',
         provider: userInfo.provider
       });
 
-      // Try to find existing user by email
+      // Always try to find existing user first - this is the primary path
       let user = null;
+
       try {
         user = await this.userRepository.findByEmail(userInfo.email);
         logger.info('User lookup result', {
@@ -307,29 +308,45 @@ class AuthService {
           email: userInfo.email?.substring(0, 10) + '...'
         });
       } catch (findError) {
-        logger.warn('Error finding user by email, will try to create new user', {
+        logger.warn('Repository findByEmail failed, trying direct query', {
           error: findError.message,
           email: userInfo.email?.substring(0, 10) + '...'
         });
-        user = null; // Ensure user is null if lookup fails
+
+        // Try direct query as backup
+        user = await this.findUserByEmailDirect(userInfo.email);
+        if (user) {
+          logger.info('Found user with direct query', { userId: user.id });
+        }
       }
 
       if (user) {
-        // Update existing user using our new schema
-        logger.info('Updating existing user', { userId: user.id });
-        user = await this.userRepository.update(user.id, {
-          full_name: userInfo.name,
-          picture_url: userInfo.avatar_url,
-          provider: userInfo.provider,
-          provider_id: userInfo.provider_id,
-          email_verified: userInfo.email_verified,
-          last_login_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-        logger.info('User updated successfully', { userId: user.id });
+        // User exists - sign them in by updating their login info
+        logger.info('Existing user found - signing them in', { userId: user.id });
+
+        try {
+          user = await this.userRepository.update(user.id, {
+            full_name: userInfo.name,
+            picture_url: userInfo.avatar_url,
+            provider: userInfo.provider,
+            provider_id: userInfo.provider_id,
+            email_verified: userInfo.email_verified,
+            last_login_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+          logger.info('Existing user updated successfully for sign-in', { userId: user.id });
+        } catch (updateError) {
+          logger.warn('Failed to update existing user, but proceeding with sign-in', {
+            userId: user.id,
+            error: updateError.message
+          });
+          // Even if update fails, we can still sign them in with the existing user data
+        }
       } else {
-        // Create new user using our new schema structure
-        logger.info('Creating new user', { email: userInfo.email?.substring(0, 10) + '...' });
+        // User doesn't exist - create new user
+        logger.info('No existing user found - creating new user', {
+          email: userInfo.email?.substring(0, 10) + '...'
+        });
 
         try {
           user = await this.userRepository.create({
@@ -340,7 +357,6 @@ class AuthService {
             provider_id: userInfo.provider_id,
             email_verified: userInfo.email_verified,
             last_login_at: new Date().toISOString()
-            // Note: auth_user_id will be set by the database trigger
           });
 
           logger.info('New user created successfully', {
@@ -349,51 +365,45 @@ class AuthService {
             provider: user.provider
           });
         } catch (createError) {
-          // If creation fails due to duplicate, try to find and update the user
-          if (createError.code === '23505') { // PostgreSQL unique constraint violation
-            logger.warn('User creation failed due to duplicate, attempting to find and update existing user');
+          // If creation fails due to duplicate, the user was created by another concurrent request
+          if (createError.code === '23505') {
+            logger.info('User created by concurrent request, finding existing user');
 
-            try {
-              // Use a small delay to ensure any concurrent operations complete
-              await new Promise(resolve => setTimeout(resolve, 100));
+            // Wait a moment for the concurrent operation to complete
+            await new Promise(resolve => setTimeout(resolve, 200));
 
-              user = await this.userRepository.findByEmail(userInfo.email);
-              if (user) {
-                logger.info('Found existing user, updating...', { userId: user.id });
-                user = await this.userRepository.update(user.id, {
-                  full_name: userInfo.name,
-                  picture_url: userInfo.avatar_url,
-                  provider: userInfo.provider,
-                  provider_id: userInfo.provider_id,
-                  email_verified: userInfo.email_verified,
-                  last_login_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                });
-                logger.info('Successfully updated user after duplicate creation attempt', { userId: user.id });
-              } else {
-                // User still not found - try direct database query with admin client
-                logger.warn('User not found with repository method, trying direct query');
-                const directUser = await this.findUserByEmailDirect(userInfo.email);
-                if (directUser) {
-                  user = directUser;
-                  logger.info('Found user with direct query', { userId: user.id });
-                } else {
-                  logger.error('User still not found after duplicate constraint error');
-                  throw new Error(`User exists (duplicate constraint) but cannot be found: ${userInfo.email}`);
-                }
-              }
-            } catch (findError) {
-              logger.error('Failed to find/update user after duplicate creation', {
-                error: findError.message,
-                email: userInfo.email?.substring(0, 10) + '...'
-              });
-              throw findError;
+            // Try to find the user again
+            user = await this.userRepository.findByEmail(userInfo.email);
+            if (!user) {
+              user = await this.findUserByEmailDirect(userInfo.email);
+            }
+
+            if (user) {
+              logger.info('Successfully found user created by concurrent request', { userId: user.id });
+            } else {
+              logger.error('User exists (duplicate constraint) but cannot be found');
+              throw new Error(`Authentication failed: User exists but cannot be retrieved for ${userInfo.email}`);
             }
           } else {
-            throw createError; // Re-throw non-duplicate errors
+            logger.error('User creation failed with non-duplicate error', {
+              error: createError.message,
+              code: createError.code
+            });
+            throw createError;
           }
         }
       }
+
+      if (!user) {
+        throw new Error('Failed to create or retrieve user');
+      }
+
+      logger.info('User authentication successful', {
+        userId: user.id,
+        email: userInfo.email?.substring(0, 10) + '...',
+        isNewUser: !user.updated_at || user.created_at === user.updated_at,
+        provider: userInfo.provider
+      });
 
       return user;
     } catch (error) {
