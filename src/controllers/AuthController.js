@@ -41,6 +41,14 @@ class AuthController {
     const { provider } = req.params;
     const { code, state, error } = req.query;
 
+    logger.info('OAuth GET callback received', {
+      provider,
+      hasCode: !!code,
+      hasState: !!state,
+      codeLength: code?.length,
+      error: error
+    });
+
     if (error) {
       logger.warn('OAuth callback error', { provider, error });
       return res.status(400).json({
@@ -53,6 +61,7 @@ class AuthController {
     }
 
     if (!code) {
+      logger.error('OAuth callback missing code', { provider, queryParams: Object.keys(req.query) });
       return res.status(400).json({
         success: false,
         error: {
@@ -62,12 +71,25 @@ class AuthController {
       });
     }
 
-    const tokens = await this.authService.exchangeCodeForTokens(provider, code, state);
+    try {
+      logger.info('Starting token exchange', { provider, codePrefix: code.substring(0, 10) + '...' });
+      const tokens = await this.authService.exchangeCodeForTokens(provider, code, state);
+      logger.info('Token exchange successful', { provider, hasAccessToken: !!tokens.access_token });
 
-    res.json({
-      success: true,
-      data: tokens
-    });
+      res.json({
+        success: true,
+        data: tokens
+      });
+    } catch (exchangeError) {
+      logger.error('OAuth token exchange failed in controller', {
+        provider,
+        error: exchangeError.message,
+        stack: exchangeError.stack
+      });
+
+      // Re-throw to let asyncHandler handle it
+      throw exchangeError;
+    }
   });
 
   // Handle OAuth callback (POST - for desktop app requests)
