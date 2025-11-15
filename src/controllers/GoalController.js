@@ -28,7 +28,13 @@ class GoalController {
   // Get user's goals
   getUserGoals = asyncHandler(async (req, res) => {
     const { userId } = req.user;
-    const { status, include_completed } = req.query;
+    let { status, include_completed } = req.query;
+
+    // Map "active" query parameter to correct database enum value "in_progress"
+    // Database enum values: pending, in_progress, completed, cancelled
+    if (status === 'active') {
+      status = 'in_progress';
+    }
 
     const options = {
       status,
