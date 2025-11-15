@@ -122,34 +122,16 @@ class BatchProcessingService {
 
   async performGeminiAnalysis(screenshots, analysisType) {
     try {
-      // Step 1: Analyze individual screenshots with vision
-      const individualAnalyses = [];
-      for (const screenshot of screenshots) {
-        if (screenshot.file_storage_key) {
-          try {
-            const analysis = await this.analyzeIndividualScreenshot(screenshot);
-            individualAnalyses.push({
-              ...analysis,
-              screenshot_id: screenshot.id,
-              timestamp: screenshot.created_at,
-              active_app: screenshot.active_app
-            });
-          } catch (error) {
-            logger.warn('Failed to analyze individual screenshot', {
-              screenshotId: screenshot.id,
-              error: error.message
-            });
-          }
-        }
-      }
+      // Use existing individual analyses from the screenshot_analysis table instead of re-analyzing images
+      const existingAnalyses = await this.getExistingScreenshotAnalyses(screenshots);
 
-      if (individualAnalyses.length === 0) {
-        logger.warn('No screenshots were successfully analyzed, using fallback');
+      if (existingAnalyses.length === 0) {
+        logger.warn('No existing screenshot analyses found, using fallback');
         return this.generateFallbackAnalysis(screenshots);
       }
 
-      // Step 2: Create aggregate analysis from individual analyses
-      const aggregatePrompt = this.buildAggregateAnalysisPrompt(individualAnalyses, screenshots);
+      // Create aggregate analysis from existing individual analyses
+      const aggregatePrompt = this.buildAggregateAnalysisPrompt(existingAnalyses, screenshots);
       const result = await this.model.generateContent({
         contents: [{ role: "user", parts: [{ text: aggregatePrompt }] }],
         generationConfig: {
@@ -167,6 +149,61 @@ class BatchProcessingService {
     } catch (error) {
       logger.error('Gemini batch analysis failed', { error: error.message });
       return this.generateFallbackAnalysis(screenshots);
+    }
+  }
+
+  async getExistingScreenshotAnalyses(screenshots) {
+    try {
+      // Get existing analyses from the screenshot_analysis table
+      const { createClient } = require('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+      );
+
+      const screenshotIds = screenshots.map(s => s.id).filter(Boolean);
+
+      if (screenshotIds.length === 0) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from('screenshot_analysis')
+        .select('screenshot_id, activity_detected, productivity_score, detected_apps, detected_tasks')
+        .in('screenshot_id', screenshotIds)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        logger.warn('Failed to fetch existing analyses', { error: error.message });
+        return [];
+      }
+
+      // Match analyses with screenshot data
+      const analyses = [];
+      for (const analysis of data || []) {
+        const screenshot = screenshots.find(s => s.id === analysis.screenshot_id);
+        if (screenshot) {
+          analyses.push({
+            screenshot_id: analysis.screenshot_id,
+            timestamp: screenshot.created_at,
+            active_app: screenshot.active_app,
+            description: `User was doing ${analysis.activity_detected} (${Math.round(analysis.productivity_score)}% productive)${analysis.detected_apps ? ` using ${analysis.detected_apps.map(app => app.name).join(', ')}` : ''}`,
+            analyzed_with_existing_data: true,
+            activity_detected: analysis.activity_detected,
+            productivity_score: analysis.productivity_score
+          });
+        }
+      }
+
+      logger.info('Retrieved existing screenshot analyses', {
+        found: analyses.length,
+        requested: screenshots.length
+      });
+
+      return analyses;
+    } catch (error) {
+      logger.warn('Failed to get existing analyses', { error: error.message });
+      return [];
     }
   }
 
