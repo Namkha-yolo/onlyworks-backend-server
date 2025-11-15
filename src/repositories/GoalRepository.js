@@ -11,7 +11,7 @@ class GoalRepository extends BaseRepository {
       title: goalData.title,
       description: goalData.description,
       target_completion_date: goalData.target_completion_date,
-      status: 'active',
+      status: 'in_progress',
       progress_percentage: 0,
       auto_tracked: goalData.auto_tracked !== false,
       completion_criteria: goalData.completion_criteria || null
@@ -25,7 +25,7 @@ class GoalRepository extends BaseRepository {
     if (status) {
       filters.status = status;
     } else if (!includeCompleted) {
-      filters.status = 'active';
+      filters.status = 'in_progress';
     }
 
     return this.findByUserId(userId, filters);
@@ -48,10 +48,10 @@ class GoalRepository extends BaseRepository {
 
       const totalGoals = goals.length;
       const completedGoals = goals.filter(g => g.status === 'completed').length;
-      const activeGoals = goals.filter(g => g.status === 'active').length;
+      const activeGoals = goals.filter(g => g.status === 'in_progress').length;
 
       const totalProgress = goals
-        .filter(g => g.status === 'active')
+        .filter(g => g.status === 'in_progress')
         .reduce((sum, goal) => sum + (goal.progress_percentage || 0), 0);
 
       const averageProgress = activeGoals > 0 ? totalProgress / activeGoals : 0;
@@ -77,7 +77,7 @@ class GoalRepository extends BaseRepository {
         .from(this.tableName)
         .select('*')
         .eq('user_id', userId)
-        .eq('status', 'active')
+        .eq('status', 'in_progress')
         .not('target_completion_date', 'is', null)
         .lte('target_completion_date', futureDate.toISOString().split('T')[0])
         .order('target_completion_date', { ascending: true });
