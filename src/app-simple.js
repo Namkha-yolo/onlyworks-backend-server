@@ -80,28 +80,56 @@ const simpleAuth = (req, res, next) => {
   // Extract token and decode user info
   const token = authHeader.replace('Bearer ', '');
 
-  // For JWT tokens, decode the user info
-  // In a real app, this would validate the JWT properly
-  let userId = 'user-' + Date.now();
-  let userEmail = 'user@onlyworks.com';
-  let userName = 'OnlyWorks User';
+  try {
+    // Decode JWT token properly
+    const base64Payload = token.split('.')[1];
+    const decodedPayload = JSON.parse(Buffer.from(base64Payload, 'base64').toString());
 
-  // Try to extract user ID from token if it's a JWT-like format
-  if (token.includes('-')) {
-    const parts = token.split('-');
-    if (parts.length >= 2) {
-      userId = 'user-' + parts[1];
-      // Use the user ID to generate a consistent but unique email
-      userEmail = `user${parts[1]}@onlyworks.com`;
-      userName = `User ${parts[1]}`;
+    console.log('🔍 Decoded JWT payload:', decodedPayload);
+
+    // Extract user info from JWT
+    const userId = decodedPayload.userId;
+    const userEmail = decodedPayload.email || 'user@onlyworks.com';
+    const userName = decodedPayload.name || 'OnlyWorks User';
+
+    if (!userId) {
+      throw new Error('No userId found in JWT token');
     }
-  }
 
-  req.user = {
-    id: userId,
-    email: userEmail,
-    name: userName
-  };
+    // Now look up user in database using auth_user_id (not id)
+    const userQuery = await db.query('SELECT * FROM users WHERE auth_user_id = $1', [userId]);
+
+    if (userQuery.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'USER_NOT_FOUND',
+          message: 'User not found in database',
+          details: { operation: 'find_user_by_id', userId: userId },
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    req.user = {
+      id: userQuery.rows[0].id,        // Use the users table primary key
+      auth_user_id: userId,            // The auth.users.id from JWT
+      email: userEmail,
+      name: userName,
+      dbUser: userQuery.rows[0]        // Full user record from database
+    };
+  } catch (error) {
+    console.error('❌ JWT decoding error:', error);
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'INVALID_TOKEN',
+        message: 'Failed to decode JWT token',
+        details: { operation: 'jwt_decode' },
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
 
   next();
 };
