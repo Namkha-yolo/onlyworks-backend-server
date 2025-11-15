@@ -6,12 +6,13 @@ class ScreenshotRepository extends BaseRepository {
   }
 
   async createScreenshot(userId, sessionId, screenshotData) {
-    // Use work_session_id as expected by current database schema
+    // Use session_id as per actual database schema
     const createData = {
       user_id: userId,
-      work_session_id: sessionId,
+      session_id: sessionId,
       file_storage_key: screenshotData.file_storage_key,
       file_size_bytes: screenshotData.file_size_bytes,
+      action_type: screenshotData.action_type || 'manual',
       timestamp: screenshotData.timestamp || new Date().toISOString(),
       window_title: screenshotData.window_title,
       active_app: screenshotData.active_app,
@@ -28,8 +29,8 @@ class ScreenshotRepository extends BaseRepository {
   }
 
   async findBySession(sessionId, userId) {
-    // Use work_session_id (current database schema)
-    return await this.findByUserId(userId, { work_session_id: sessionId });
+    // Use session_id (actual database schema)
+    return await this.findByUserId(userId, { session_id: sessionId });
   }
 
   async markAnalysisCompleted(screenshotId, userId) {
