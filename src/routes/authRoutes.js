@@ -10,6 +10,7 @@ router.get('/oauth/:provider/init', authController.initOAuth);
 
 // OAuth callback endpoints
 router.get('/oauth/:provider/callback', authController.handleOAuthCallback);
+router.post('/oauth/:provider/callback', authController.handleOAuthCallbackPost);
 
 // Token refresh endpoint
 router.post('/refresh', authController.refreshToken);

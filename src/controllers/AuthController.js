@@ -36,10 +36,46 @@ class AuthController {
     });
   });
 
-  // Handle OAuth callback
+  // Handle OAuth callback (GET - for browser redirects)
   handleOAuthCallback = asyncHandler(async (req, res) => {
     const { provider } = req.params;
     const { code, state, error } = req.query;
+
+    if (error) {
+      logger.warn('OAuth callback error', { provider, error });
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'OAUTH_ERROR',
+          message: error
+        }
+      });
+    }
+
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_CODE',
+          message: 'Authorization code is required'
+        }
+      });
+    }
+
+    const tokens = await this.authService.exchangeCodeForTokens(provider, code, state);
+
+    res.json({
+      success: true,
+      data: tokens
+    });
+  });
+
+  // Handle OAuth callback (POST - for desktop app requests)
+  handleOAuthCallbackPost = asyncHandler(async (req, res) => {
+    const { provider } = req.params;
+    const { code, state, error } = req.body;
+
+    logger.info('OAuth POST callback received', { provider, hasCode: !!code, hasState: !!state });
 
     if (error) {
       logger.warn('OAuth callback error', { provider, error });
