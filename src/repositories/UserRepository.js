@@ -24,21 +24,40 @@ class UserRepository extends BaseRepository {
   }
 
   async createUser(userData) {
-    const defaultOrganizationId = process.env.DEFAULT_ORGANIZATION_ID || '00000000-0000-0000-0000-000000000001';
+    try {
+      const defaultOrganizationId = process.env.DEFAULT_ORGANIZATION_ID || '00000000-0000-0000-0000-000000000001';
 
-    const user = await this.create({
-      email: userData.email,
-      name: userData.name || userData.display_name, // Use 'name' instead of 'display_name'
-      avatar_url: userData.avatar_url,
-      timezone: userData.timezone || 'UTC',
-      email_verified: userData.email_verified || false,
-      organization_id: userData.organization_id || defaultOrganizationId,
-      oauth_provider: userData.oauth_provider,
-      oauth_id: userData.oauth_id || userData.oauth_provider_id, // Use 'oauth_id' instead of 'oauth_provider_id'
-      status: 'active'
-    });
+      // Use admin client directly to bypass RLS policies for user creation
+      const client = this.supabaseAdmin || this.supabase;
 
-    return user;
+      const userRecord = {
+        email: userData.email,
+        full_name: userData.name || userData.display_name, // Use 'full_name' to match schema
+        picture_url: userData.avatar_url, // Use 'picture_url' to match schema
+        timezone: userData.timezone || 'UTC',
+        email_verified: userData.email_verified || false,
+        organization_id: userData.organization_id || defaultOrganizationId,
+        provider: userData.oauth_provider, // Use 'provider' to match schema
+        provider_id: userData.oauth_id || userData.oauth_provider_id, // Use 'provider_id' to match schema
+        status: 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: user, error } = await client
+        .from(this.tableName)
+        .insert([userRecord])
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return user;
+    } catch (error) {
+      throw error;
+    }
   }
 
   async updateProfile(userId, profileData) {

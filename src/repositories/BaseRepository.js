@@ -1,10 +1,11 @@
-const { getSupabaseClient } = require('../config/database');
+const { getSupabaseClient, getSupabaseAdminClient } = require('../config/database');
 const { logger } = require('../utils/logger');
 
 class BaseRepository {
   constructor(tableName) {
     this.tableName = tableName;
     this.supabase = getSupabaseClient();
+    this.supabaseAdmin = getSupabaseAdminClient();
   }
 
   async findById(id, userId = null) {
@@ -72,7 +73,12 @@ class BaseRepository {
       const startTime = Date.now();
       logger.info(`Creating record in ${this.tableName}`, { data });
 
-      const { data: result, error } = await this.supabase
+      // Use admin client for user creation to bypass RLS policies
+      const client = this.tableName === 'users' && this.supabaseAdmin
+        ? this.supabaseAdmin
+        : this.supabase;
+
+      const { data: result, error } = await client
         .from(this.tableName)
         .insert([data])
         .select()
