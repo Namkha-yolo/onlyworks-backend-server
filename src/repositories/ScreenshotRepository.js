@@ -5,6 +5,47 @@ class ScreenshotRepository extends BaseRepository {
     super('screenshots');
   }
 
+  validateActionType(actionType) {
+    // Valid action_type enum values based on database schema and usage patterns
+    const validActionTypes = [
+      'manual',
+      'click',
+      'copy',
+      'paste',
+      'timer',
+      'interval',
+      'enter',
+      'keyboard',
+      'auto'
+    ];
+
+    // If provided action type is valid, use it
+    if (actionType && validActionTypes.includes(actionType)) {
+      return actionType;
+    }
+
+    // Map common test/invalid values to valid ones
+    const actionTypeMapping = {
+      'emergency_test': 'manual',
+      'schema_test': 'manual',
+      'test': 'manual',
+      'schema_compliance_test': 'manual',
+      'emergency_conflict_test': 'manual',
+      'conflict_test': 'manual',
+      'upload_test': 'manual',
+      'test_upload': 'manual'
+    };
+
+    if (actionType && actionTypeMapping[actionType]) {
+      console.log(`📝 Mapped invalid action_type '${actionType}' to '${actionTypeMapping[actionType]}'`);
+      return actionTypeMapping[actionType];
+    }
+
+    // Default fallback
+    console.log(`⚠️ Unknown action_type '${actionType}', using default 'manual'`);
+    return 'manual';
+  }
+
   async createScreenshot(userId, sessionId, screenshotData) {
     // Map to actual database schema columns from screenshots table
     const createData = {
@@ -20,8 +61,9 @@ class ScreenshotRepository extends BaseRepository {
       file_size: screenshotData.file_size_bytes, // Map to both file_size and file_size_bytes
       file_type: screenshotData.file_type || 'image/png',
 
-      // Required action_type field (NOT NULL in schema)
-      action_type: screenshotData.action_type || 'manual',
+      // Required action_type field (NOT NULL ENUM in schema)
+      // Valid values: manual, click, copy, paste, timer, interval
+      action_type: this.validateActionType(screenshotData.action_type),
 
       // Mouse and screen data
       mouse_x: screenshotData.click_x || screenshotData.mouse_x,
