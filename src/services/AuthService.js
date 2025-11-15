@@ -352,20 +352,42 @@ class AuthService {
           // If creation fails due to duplicate, try to find and update the user
           if (createError.code === '23505') { // PostgreSQL unique constraint violation
             logger.warn('User creation failed due to duplicate, attempting to find and update existing user');
-            user = await this.userRepository.findByEmail(userInfo.email);
-            if (user) {
-              user = await this.userRepository.update(user.id, {
-                full_name: userInfo.name,
-                picture_url: userInfo.avatar_url,
-                provider: userInfo.provider,
-                provider_id: userInfo.provider_id,
-                email_verified: userInfo.email_verified,
-                last_login_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
+
+            try {
+              // Use a small delay to ensure any concurrent operations complete
+              await new Promise(resolve => setTimeout(resolve, 100));
+
+              user = await this.userRepository.findByEmail(userInfo.email);
+              if (user) {
+                logger.info('Found existing user, updating...', { userId: user.id });
+                user = await this.userRepository.update(user.id, {
+                  full_name: userInfo.name,
+                  picture_url: userInfo.avatar_url,
+                  provider: userInfo.provider,
+                  provider_id: userInfo.provider_id,
+                  email_verified: userInfo.email_verified,
+                  last_login_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                });
+                logger.info('Successfully updated user after duplicate creation attempt', { userId: user.id });
+              } else {
+                // User still not found - try direct database query with admin client
+                logger.warn('User not found with repository method, trying direct query');
+                const directUser = await this.findUserByEmailDirect(userInfo.email);
+                if (directUser) {
+                  user = directUser;
+                  logger.info('Found user with direct query', { userId: user.id });
+                } else {
+                  logger.error('User still not found after duplicate constraint error');
+                  throw new Error(`User exists (duplicate constraint) but cannot be found: ${userInfo.email}`);
+                }
+              }
+            } catch (findError) {
+              logger.error('Failed to find/update user after duplicate creation', {
+                error: findError.message,
+                email: userInfo.email?.substring(0, 10) + '...'
               });
-              logger.info('Successfully updated user after duplicate creation attempt', { userId: user.id });
-            } else {
-              throw createError; // Re-throw if we still can't find the user
+              throw findError;
             }
           } else {
             throw createError; // Re-throw non-duplicate errors
@@ -381,6 +403,42 @@ class AuthService {
         email: userInfo?.email?.substring(0, 10) + '...'
       });
       throw error;
+    }
+  }
+
+  /**
+   * Direct database query to find user by email using admin client
+   * Used as a fallback when repository methods fail
+   * @param {string} email - User email to search for
+   * @returns {Object|null} User object or null
+   */
+  async findUserByEmailDirect(email) {
+    try {
+      const supabaseAdmin = getSupabaseAdminClient();
+
+      if (!supabaseAdmin) {
+        logger.warn('Supabase admin client not available for direct query');
+        return null;
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        logger.error('Direct user query failed', { error: error.message, email: email?.substring(0, 5) + '***' });
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      logger.error('Error in findUserByEmailDirect', {
+        error: error.message,
+        email: email?.substring(0, 5) + '***'
+      });
+      return null;
     }
   }
 
