@@ -41,7 +41,7 @@ class AuthService {
 
     const params = new URLSearchParams({
       client_id: clientId,
-      redirect_uri: redirectUri || `${process.env.BASE_URL}/api/auth/oauth/google/callback`,
+      redirect_uri: redirectUri || process.env.GOOGLE_REDIRECT_URI || `${process.env.BASE_URL}/api/auth/oauth/google/callback`,
       response_type: 'code',
       scope: 'openid email profile',
       access_type: 'offline',
@@ -136,7 +136,7 @@ class AuthService {
         client_secret: clientSecret,
         code,
         grant_type: 'authorization_code',
-        redirect_uri: `${process.env.BASE_URL}/api/auth/oauth/google/callback`
+        redirect_uri: process.env.GOOGLE_REDIRECT_URI || `${process.env.BASE_URL}/api/auth/oauth/google/callback`
       })
     });
 
