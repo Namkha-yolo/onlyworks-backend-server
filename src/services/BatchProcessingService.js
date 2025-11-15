@@ -260,16 +260,20 @@ Based on the screenshot metadata, provide analysis in the following JSON format:
       // Get batch reports for the session
       let batchReports = [];
       try {
+        logger.info('Attempting to get session reports from batch_reports table', { sessionId });
         batchReports = await this.batchReportRepo.getSessionReports(sessionId, {
           limit: 100,
           orderBy: 'created_at',
           direction: 'ASC'
         });
+        logger.info('Successfully retrieved batch reports', { count: batchReports.length, sessionId });
       } catch (error) {
-        logger.warn('Batch reports table not available, using screenshots directly', { error: error.message });
+        logger.warn('Batch reports table not available, using screenshots directly', { error: error.message, sessionId });
 
         // Fallback: Generate summary from screenshots
-        const screenshots = await this.screenshotRepo.findBySession(sessionId, userId);
+        logger.info('Falling back to screenshot-based summary generation', { sessionId });
+        const screenshots = await this.screenshotRepo.findBySession(sessionId, userId, { limit: 100 });
+        logger.info('Screenshots retrieved for fallback summary', { count: screenshots.length, sessionId });
         if (screenshots.length === 0) {
           throw new ApiError('NO_DATA', { message: 'No data available for session summary' });
         }
