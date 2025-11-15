@@ -31,7 +31,12 @@ class ScreenshotController {
 
     // Handle file upload if present
     if (uploadedFile) {
-      const fileName = `screenshot_${Date.now()}.${uploadedFile.mimetype.split('/')[1]}`;
+      // Generate unique filename to prevent conflicts - prefer JPEG for efficiency
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(2, 8);
+      const fileExtension = uploadedFile.mimetype === 'image/jpeg' ? 'jpg' :
+                           uploadedFile.mimetype === 'image/png' ? 'png' : 'jpg';
+      const fileName = `screenshot_${timestamp}_${randomId}.${fileExtension}`;
 
       const uploadResult = await this.fileStorage.uploadFile(
         uploadedFile.buffer,
@@ -50,12 +55,17 @@ class ScreenshotController {
         });
       }
 
-      // Use upload result data
+      // Use upload result data and add required database fields
       finalScreenshotData = {
         ...finalScreenshotData,
         file_storage_key: uploadResult.data.path,
         file_size_bytes: uploadedFile.size,
-        public_url: uploadResult.data.publicUrl
+        file_size: uploadedFile.size, // Map to both columns
+        public_url: uploadResult.data.publicUrl,
+        filename: fileName,
+        file_path: uploadResult.data.path, // Use storage path as file_path
+        storage_path: uploadResult.data.path,
+        file_type: uploadedFile.mimetype
       };
     } else {
       // Validate required fields for metadata-only uploads
@@ -65,10 +75,61 @@ class ScreenshotController {
     // Validate sessionId is present
     validateRequired(req.body, ['sessionId']);
 
-    const screenshot = await this.screenshotRepository.createScreenshot(userId, sessionId, {
-      ...finalScreenshotData,
-      timestamp: finalScreenshotData.timestamp || new Date().toISOString()
-    });
+    // Retry logic for database conflicts
+    const maxRetries = 3;
+    let screenshot;
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Add unique timestamp and attempt suffix to prevent conflicts
+        const uniqueData = {
+          ...finalScreenshotData,
+          timestamp: finalScreenshotData.timestamp || new Date().toISOString(),
+        };
+
+        // If retrying, modify the file storage key to be unique
+        if (attempt > 1 && uniqueData.file_storage_key) {
+          const parts = uniqueData.file_storage_key.split('.');
+          if (parts.length > 1) {
+            parts[parts.length - 2] += `_retry${attempt}`;
+            uniqueData.file_storage_key = parts.join('.');
+          } else {
+            uniqueData.file_storage_key += `_retry${attempt}`;
+          }
+        }
+
+        screenshot = await this.screenshotRepository.createScreenshot(userId, sessionId, uniqueData);
+
+        if (attempt > 1) {
+          logger.info(`Screenshot upload succeeded on retry ${attempt}`, { userId, sessionId });
+        }
+        break; // Success, exit retry loop
+
+      } catch (error) {
+        lastError = error;
+        logger.warn(`Screenshot upload attempt ${attempt} failed`, {
+          userId,
+          sessionId,
+          error: error.message,
+          code: error.code
+        });
+
+        // If it's a conflict error and we have retries left, continue
+        if ((error.code === '23505' || error.message.includes('duplicate') || error.message.includes('conflict')) && attempt < maxRetries) {
+          const delay = Math.min(100 * Math.pow(2, attempt - 1), 1000); // Exponential backoff
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        // If not a conflict or no retries left, throw the error
+        throw error;
+      }
+    }
+
+    if (!screenshot) {
+      throw new Error(`Failed to upload screenshot after ${maxRetries} attempts: ${lastError?.message}`);
+    }
 
     // Queue for AI analysis
     this.queueForAnalysis(screenshot.id, screenshot.file_storage_key);

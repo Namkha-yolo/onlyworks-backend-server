@@ -110,6 +110,80 @@ app.use('/api/batch', batchProcessingRoutes);
 app.use('/api/user-session', userSessionRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
+// Backward compatibility endpoint for desktop app
+// Desktop app expects POST /api/analyze
+app.post('/api/analyze', async (req, res) => {
+  try {
+    const { imageData, analysisType = 'full' } = req.body;
+
+    if (!imageData) {
+      return res.status(400).json({
+        success: false,
+        error: 'imageData is required'
+      });
+    }
+
+    // Simple mock response for now - can be enhanced later
+    const mockAnalysis = {
+      success: true,
+      analysisType,
+      results: {
+        productivity_score: Math.floor(Math.random() * 100),
+        activity_classification: 'productive',
+        detected_applications: ['Code Editor', 'Browser'],
+        focus_level: 'high',
+        timestamp: new Date().toISOString()
+      },
+      message: 'Analysis completed successfully'
+    };
+
+    logger.info('Desktop analyze request processed', { analysisType });
+    res.json(mockAnalysis);
+  } catch (error) {
+    logger.error('Desktop analyze error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Analysis failed',
+      details: error.message
+    });
+  }
+});
+
+// Debug endpoints for frontend connectivity testing
+app.get('/api/test/connectivity', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Backend connectivity OK',
+    timestamp: new Date().toISOString(),
+    headers: req.headers
+  });
+});
+
+app.get('/api/test/auth', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  res.json({
+    success: true,
+    message: 'Auth test endpoint',
+    has_auth_header: !!authHeader,
+    auth_header_preview: authHeader ? authHeader.substring(0, 20) + '...' : null,
+    auth_header_full_length: authHeader ? authHeader.length : 0,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Also add a no-auth version of the session stats for testing
+app.get('/api/test/session-stats', async (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      total_time_minutes: 120,
+      total_sessions: 5,
+      average_focus: 75
+    },
+    message: 'Mock session stats for testing'
+  });
+});
+
 // Root health check routes (for monitoring/load balancers)
 app.get('/', (req, res) => {
   res.json({

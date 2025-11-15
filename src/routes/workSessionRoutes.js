@@ -30,7 +30,7 @@ router.post('/test-create', async (req, res) => {
       message: 'Test session created successfully'
     });
   } catch (error) {
-    logger.error('Test session creation failed', {
+    console.error('Test session creation failed', {
       error: error.message,
       code: error.code,
       details: error.details
