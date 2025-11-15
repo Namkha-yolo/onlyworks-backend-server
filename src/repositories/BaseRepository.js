@@ -11,7 +11,13 @@ class BaseRepository {
   async findById(id, userId = null) {
     try {
       const startTime = Date.now();
-      let query = this.supabase
+
+      // Use admin client for users table to bypass RLS policies
+      const client = this.tableName === 'users' && this.supabaseAdmin
+        ? this.supabaseAdmin
+        : this.supabase;
+
+      let query = client
         .from(this.tableName)
         .select('*')
         .eq('id', id);
@@ -108,7 +114,13 @@ class BaseRepository {
   async update(id, data, userId = null) {
     try {
       const startTime = Date.now();
-      let query = this.supabase
+
+      // Use admin client for users table to bypass RLS policies
+      const client = this.tableName === 'users' && this.supabaseAdmin
+        ? this.supabaseAdmin
+        : this.supabase;
+
+      let query = client
         .from(this.tableName)
         .update(data)
         .eq('id', id);
