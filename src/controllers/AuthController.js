@@ -147,15 +147,12 @@ class AuthController {
 
     res.json({
       success: true,
-      data: {
-        valid: true,
-        user: {
-          id: req.user.userId,
-          email: req.user.email,
-          name: req.user.name,
-          avatar_url: req.user.avatar_url,
-          provider: req.user.provider
-        }
+      user: {
+        id: req.user.userId,
+        email: req.user.email,
+        full_name: req.user.name,
+        picture_url: req.user.avatar_url,
+        provider: req.user.provider
       }
     });
   });

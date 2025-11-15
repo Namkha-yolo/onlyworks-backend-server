@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { ApiError } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
+const { getUserByEmailCompat, createUserCompat } = require('../utils/supabaseCompat');
+const { getSupabaseAdminClient } = require('../config/database');
 const UserRepository = require('../repositories/UserRepository');
 
 class AuthService {
@@ -106,9 +108,9 @@ class AuthService {
         user: {
           id: user.id,
           email: user.email,
-          name: user.name, // Use 'name' instead of 'display_name'
-          avatar_url: user.avatar_url,
-          provider: user.oauth_provider
+          name: user.full_name, // Use 'full_name' from our schema
+          avatar_url: user.picture_url, // Use 'picture_url' from our schema
+          provider: user.provider // Use 'provider' from our schema
         }
       };
     } catch (error) {
@@ -234,34 +236,33 @@ class AuthService {
       let user = await this.userRepository.findByEmail(userInfo.email);
 
       if (user) {
-        // Update existing user
+        // Update existing user using our new schema
         user = await this.userRepository.update(user.id, {
-          name: userInfo.name, // Use 'name' instead of 'display_name'
-          avatar_url: userInfo.avatar_url,
-          oauth_provider: userInfo.provider,
-          oauth_id: userInfo.provider_id, // Use 'oauth_id' instead of 'oauth_provider_id'
+          full_name: userInfo.name,
+          picture_url: userInfo.avatar_url,
+          provider: userInfo.provider,
+          provider_id: userInfo.provider_id,
           email_verified: userInfo.email_verified,
-          last_login_at: new Date().toISOString()
+          last_login_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         });
       } else {
-        // Create new user with default organization assignment
-        const defaultOrganizationId = process.env.DEFAULT_ORGANIZATION_ID || '00000000-0000-0000-0000-000000000001';
-
+        // Create new user using our new schema structure
         user = await this.userRepository.create({
           email: userInfo.email,
-          name: userInfo.name, // Use 'name' instead of 'display_name'
-          avatar_url: userInfo.avatar_url,
-          oauth_provider: userInfo.provider,
-          oauth_id: userInfo.provider_id, // Use 'oauth_id' instead of 'oauth_provider_id'
+          full_name: userInfo.name,
+          picture_url: userInfo.avatar_url,
+          provider: userInfo.provider,
+          provider_id: userInfo.provider_id,
           email_verified: userInfo.email_verified,
-          organization_id: defaultOrganizationId,
-          status: 'active'
+          last_login_at: new Date().toISOString()
+          // Note: auth_user_id will be set by the database trigger
         });
 
-        logger.info('New user created with organization assignment', {
+        logger.info('New user created using desktop app schema', {
           userId: user.id,
           email: user.email,
-          organizationId: defaultOrganizationId
+          provider: user.provider
         });
       }
 
@@ -272,14 +273,46 @@ class AuthService {
     }
   }
 
+  /**
+   * Safe method to find user by email using Supabase admin
+   * This method provides compatibility for different Supabase client versions
+   * @param {string} email - User email to search for
+   * @returns {Object|null} User object or null
+   */
+  async findUserByEmailSafe(email) {
+    try {
+      const supabaseAdmin = getSupabaseAdminClient();
+
+      if (!supabaseAdmin) {
+        logger.warn('Supabase admin client not available, falling back to repository');
+        return await this.userRepository.findByEmail(email);
+      }
+
+      return await getUserByEmailCompat(supabaseAdmin, email);
+    } catch (error) {
+      logger.error('Error in findUserByEmailSafe, falling back to repository', {
+        error: error.message,
+        email: email?.substring(0, 5) + '***'
+      });
+
+      // Fallback to repository method
+      try {
+        return await this.userRepository.findByEmail(email);
+      } catch (fallbackError) {
+        logger.error('Fallback method also failed', { error: fallbackError.message });
+        throw fallbackError;
+      }
+    }
+  }
+
   generateAccessToken(user) {
     return jwt.sign(
       {
         userId: user.id,
         email: user.email,
-        name: user.name, // Use 'name' instead of 'display_name'
-        avatar_url: user.avatar_url,
-        provider: user.oauth_provider
+        name: user.full_name, // Use 'full_name' from our schema
+        avatar_url: user.picture_url, // Use 'picture_url' from our schema
+        provider: user.provider // Use 'provider' from our schema
       },
       this.jwtSecret,
       { expiresIn: this.jwtExpiry }

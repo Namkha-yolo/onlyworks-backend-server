@@ -5,6 +5,7 @@ const compression = require('compression');
 
 const { requestLoggingMiddleware, logger } = require('./utils/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const { supabaseErrorHandler } = require('./middleware/supabaseErrorHandler');
 const { checkDatabaseConnection } = require('./config/database');
 
 // Route imports
@@ -105,6 +106,9 @@ app.use('/api/analytics', analyticsRoutes);
 
 // Catch 404 and forward to error handler
 app.use(notFoundHandler);
+
+// Supabase-specific error handler (must be before global error handler)
+app.use(supabaseErrorHandler);
 
 // Global error handler
 app.use(errorHandler);

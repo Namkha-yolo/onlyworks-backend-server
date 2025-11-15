@@ -4,6 +4,7 @@ const { createClient } = require('@supabase/supabase-js');
 const dbConfig = {
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseKey: process.env.SUPABASE_ANON_KEY,
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
 
   // Connection pool settings
   poolConfig: {
@@ -15,8 +16,9 @@ const dbConfig = {
   }
 };
 
-// Initialize Supabase client
+// Initialize Supabase clients
 let supabaseClient = null;
+let supabaseAdminClient = null;
 
 function getSupabaseClient() {
   if (!supabaseClient) {
@@ -41,6 +43,33 @@ function getSupabaseClient() {
   }
 
   return supabaseClient;
+}
+
+// Get Supabase Admin client (with service role key for admin operations)
+function getSupabaseAdminClient() {
+  if (!supabaseAdminClient) {
+    if (!dbConfig.supabaseUrl || !dbConfig.supabaseServiceRoleKey) {
+      console.warn('Supabase admin configuration missing - some admin features may not work');
+      return null; // Return null instead of throwing error
+    }
+
+    supabaseAdminClient = createClient(dbConfig.supabaseUrl, dbConfig.supabaseServiceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      },
+      db: {
+        schema: 'public',
+      },
+      global: {
+        headers: {
+          'x-application-name': 'onlyworks-backend-admin',
+        },
+      },
+    });
+  }
+
+  return supabaseAdminClient;
 }
 
 // Health check function
@@ -80,8 +109,13 @@ async function withTransaction(callback) {
   }
 }
 
+// Create alias for admin client
+const supabaseAdmin = getSupabaseAdminClient();
+
 module.exports = {
   getSupabaseClient,
+  getSupabaseAdminClient,
+  supabaseAdmin,
   checkDatabaseConnection,
   withTransaction,
   dbConfig
