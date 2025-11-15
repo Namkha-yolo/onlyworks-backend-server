@@ -12,8 +12,8 @@ class BaseRepository {
     try {
       const startTime = Date.now();
 
-      // Use admin client for users and screenshot_sessions tables to bypass RLS policies
-      const client = (this.tableName === 'users' || this.tableName === 'screenshot_sessions') && this.supabaseAdmin
+      // Use admin client for users, screenshot_sessions, and screenshots tables to bypass RLS policies
+      const client = (this.tableName === 'users' || this.tableName === 'screenshot_sessions' || this.tableName === 'screenshots') && this.supabaseAdmin
         ? this.supabaseAdmin
         : this.supabase;
 
@@ -79,8 +79,8 @@ class BaseRepository {
       const startTime = Date.now();
       logger.info(`Creating record in ${this.tableName}`, { data });
 
-      // Use admin client for users and screenshot_sessions to bypass RLS policies
-      const client = (this.tableName === 'users' || this.tableName === 'screenshot_sessions') && this.supabaseAdmin
+      // Use admin client for users, screenshot_sessions, and screenshots to bypass RLS policies
+      const client = (this.tableName === 'users' || this.tableName === 'screenshot_sessions' || this.tableName === 'screenshots') && this.supabaseAdmin
         ? this.supabaseAdmin
         : this.supabase;
 
@@ -115,8 +115,8 @@ class BaseRepository {
     try {
       const startTime = Date.now();
 
-      // Use admin client for users and screenshot_sessions tables to bypass RLS policies
-      const client = (this.tableName === 'users' || this.tableName === 'screenshot_sessions') && this.supabaseAdmin
+      // Use admin client for users, screenshot_sessions, and screenshots tables to bypass RLS policies
+      const client = (this.tableName === 'users' || this.tableName === 'screenshot_sessions' || this.tableName === 'screenshots') && this.supabaseAdmin
         ? this.supabaseAdmin
         : this.supabase;
 
