@@ -153,7 +153,7 @@ class BatchReportRepository {
       .from(this.tableName)
       .select(`
         *,
-        work_sessions!inner(session_name, goal_description)
+        screenshot_sessions!inner(session_name, goal_description)
       `)
       .eq('user_id', userId);
 
