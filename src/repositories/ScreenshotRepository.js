@@ -186,7 +186,10 @@ class ScreenshotRepository extends BaseRepository {
     // If limit is provided, use direct query instead of findByUserId
     if (options.limit) {
       try {
-        let query = this.supabase
+        // Use admin client for screenshots table to bypass RLS policies
+        const client = this.supabaseAdmin || this.supabase;
+
+        let query = client
           .from(this.tableName)
           .select('*')
           .eq('session_id', sessionId)
