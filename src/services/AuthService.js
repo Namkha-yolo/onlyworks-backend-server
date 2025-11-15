@@ -43,7 +43,7 @@ class AuthService {
       client_id: clientId,
       redirect_uri: redirectUri || process.env.GOOGLE_REDIRECT_URI || `${process.env.BASE_URL}/api/auth/oauth/google/callback`,
       response_type: 'code',
-      scope: 'openid email profile',
+      scope: 'openid email profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
       access_type: 'offline',
       prompt: 'consent',
       state
@@ -140,36 +140,78 @@ class AuthService {
       envGoogleRedirectUri: process.env.GOOGLE_REDIRECT_URI
     });
 
-    // Exchange code for tokens
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        code,
-        grant_type: 'authorization_code',
-        redirect_uri: redirectUri
-      })
+    // Exchange code for tokens using Node.js HTTPS (more reliable than fetch)
+    const https = require('https');
+    const querystring = require('querystring');
+
+    const postData = querystring.stringify({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri
     });
 
-    const tokens = await tokenResponse.json();
-    logger.info('Google token response', {
-      status: tokenResponse.status,
-      hasAccessToken: !!tokens.access_token,
-      error: tokens.error
+    const tokens = await new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'oauth2.googleapis.com',
+        port: 443,
+        path: '/token',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(postData),
+          'User-Agent': 'onlyworks-backend/1.0.0'
+        }
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            logger.info('Google token response', {
+              status: res.statusCode,
+              hasAccessToken: !!parsed.access_token,
+              error: parsed.error,
+              errorDescription: parsed.error_description
+            });
+            resolve({ ok: res.statusCode === 200, status: res.statusCode, data: parsed });
+          } catch (parseError) {
+            logger.error('Failed to parse Google token response', { error: parseError.message, rawData: data });
+            reject(parseError);
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        logger.error('HTTPS request error to Google OAuth', { error: error.message });
+        reject(error);
+      });
+
+      req.write(postData);
+      req.end();
     });
+
+    const tokenResponse = { ok: tokens.ok, status: tokens.status };
+    const tokensData = tokens.data;
 
     if (!tokenResponse.ok) {
       throw new ApiError('OAUTH_TOKEN_EXCHANGE_FAILED', {
         provider: 'google',
-        error: tokens.error
+        error: tokensData.error,
+        error_description: tokensData.error_description
       });
     }
 
     // Get user info
     const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${tokens.access_token}` }
+      headers: { Authorization: `Bearer ${tokensData.access_token}` }
     });
 
     const userInfo = await userResponse.json();
