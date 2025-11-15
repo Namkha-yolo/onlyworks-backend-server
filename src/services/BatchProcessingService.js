@@ -50,13 +50,27 @@ class BatchProcessingService {
       let batchReportId = null;
 
       try {
+        // Create batch report using your existing database schema
+        const screenshotIds = screenshots.map(s => s.id);
+        const batchNumber = Math.floor(Date.now() / 1000); // Simple batch numbering
+
         batchReport = await this.batchReportRepo.create({
           session_id: sessionId,
           user_id: userId,
+          batch_number: batchNumber,
+          screenshot_ids: screenshotIds,
           screenshot_count: screenshots.length,
-          analysis_type: analysisType,
-          analysis_result: analysisResult,
-          created_at: new Date().toISOString()
+          start_time: screenshots[0]?.created_at || new Date().toISOString(),
+          end_time: screenshots[screenshots.length - 1]?.created_at || new Date().toISOString(),
+          processing_status: 'completed',
+          gemini_analysis: analysisResult,
+          efficiency_score: analysisResult?.efficiency_score || 0,
+          inefficiency_score: analysisResult?.inefficiency_score || 0,
+          tasks_identified: analysisResult?.tasks_identified || [],
+          tasks_completed: analysisResult?.tasks_completed || [],
+          applications_used: analysisResult?.applications_used || [],
+          activities: analysisResult?.activities || {},
+          processed_at: new Date().toISOString()
         });
         batchReportId = batchReport.id;
       } catch (error) {

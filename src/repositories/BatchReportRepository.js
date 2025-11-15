@@ -7,19 +7,74 @@ class BatchReportRepository {
   }
 
   async create(batchReportData) {
-    const { session_id, user_id, screenshot_count, analysis_type, analysis_result, created_at } = batchReportData;
+    // Support both old and new schema structures
+    const {
+      session_id,
+      user_id,
+      screenshot_count,
+      analysis_type,
+      analysis_result,
+      created_at,
+      // New schema fields
+      batch_number,
+      screenshot_ids,
+      start_time,
+      end_time,
+      processing_status,
+      gemini_analysis,
+      efficiency_score,
+      inefficiency_score,
+      tasks_identified,
+      tasks_completed,
+      applications_used,
+      activities,
+      processed_at
+    } = batchReportData;
+
+    // Build insert object based on available fields
+    const insertData = {
+      id: uuidv4(),
+      session_id,
+      user_id,
+      screenshot_count: screenshot_count || 0,
+      created_at: created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // Add fields based on your existing schema
+    if (batch_number !== undefined) insertData.batch_number = batch_number;
+    if (screenshot_ids !== undefined) insertData.screenshot_ids = screenshot_ids;
+    if (start_time !== undefined) insertData.start_time = start_time;
+    if (end_time !== undefined) insertData.end_time = end_time;
+    if (processing_status !== undefined) insertData.processing_status = processing_status;
+    if (gemini_analysis !== undefined) {
+      insertData.gemini_analysis = typeof gemini_analysis === 'string' ? gemini_analysis : JSON.stringify(gemini_analysis);
+    }
+    if (efficiency_score !== undefined) insertData.efficiency_score = efficiency_score;
+    if (inefficiency_score !== undefined) insertData.inefficiency_score = inefficiency_score;
+    if (tasks_identified !== undefined) {
+      insertData.tasks_identified = Array.isArray(tasks_identified) ? tasks_identified : [];
+    }
+    if (tasks_completed !== undefined) {
+      insertData.tasks_completed = Array.isArray(tasks_completed) ? tasks_completed : [];
+    }
+    if (applications_used !== undefined) {
+      insertData.applications_used = Array.isArray(applications_used) ? applications_used : [];
+    }
+    if (activities !== undefined) {
+      insertData.activities = typeof activities === 'string' ? activities : JSON.stringify(activities);
+    }
+    if (processed_at !== undefined) insertData.processed_at = processed_at;
+
+    // Legacy support
+    if (analysis_type !== undefined) insertData.analysis_type = analysis_type;
+    if (analysis_result !== undefined) {
+      insertData.analysis_result = typeof analysis_result === 'string' ? analysis_result : JSON.stringify(analysis_result);
+    }
 
     const { data, error } = await supabaseAdmin
       .from(this.tableName)
-      .insert([{
-        id: uuidv4(),
-        session_id,
-        user_id,
-        screenshot_count,
-        analysis_type,
-        analysis_result: typeof analysis_result === 'string' ? analysis_result : JSON.stringify(analysis_result),
-        created_at: created_at || new Date().toISOString()
-      }])
+      .insert([insertData])
       .select()
       .single();
 
