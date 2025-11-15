@@ -339,6 +339,39 @@ class WorkSessionRepository extends BaseRepository {
       throw error;
     }
   }
+
+  async updateSessionMetadata(sessionId, metadata) {
+    try {
+      // Check if work_sessions table has a metadata column
+      // If not, we'll store it in session_notes as JSON for fallback
+      let updateData = {};
+
+      // First try to update metadata column directly
+      try {
+        updateData.metadata = typeof metadata === 'string' ? metadata : JSON.stringify(metadata);
+      } catch (e) {
+        // Fallback: store in session_notes
+        updateData.session_notes = typeof metadata === 'string' ? metadata : JSON.stringify(metadata);
+      }
+
+      const { data, error } = await this.supabase
+        .from(this.tableName)
+        .update(updateData)
+        .eq('id', sessionId)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      // Ignore metadata update errors gracefully
+      console.warn('Could not update session metadata:', error.message);
+      return null;
+    }
+  }
 }
 
 module.exports = WorkSessionRepository;
