@@ -7,7 +7,7 @@
 BEGIN;
 
 -- Step 1: Migrate data from profiles to users (if profiles has data that users doesn't)
--- Only insert profiles that don't already exist in users table
+-- Only insert profiles that don't already exist in users table (by ID or EMAIL)
 INSERT INTO public.users (
   id,
   auth_user_id,
@@ -29,12 +29,17 @@ SELECT
   p.updated_at
 FROM public.profiles p
 WHERE NOT EXISTS (
-  SELECT 1 FROM public.users u WHERE u.id = p.id OR u.auth_user_id = p.id
+  SELECT 1 FROM public.users u
+  WHERE u.id = p.id
+     OR u.auth_user_id = p.id
+     OR u.email = p.email  -- Also check email to avoid duplicates
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO NOTHING;  -- Skip if ID conflict
+-- Note: Email conflicts are prevented by WHERE clause above
 
 -- Step 2: Update users table with any additional data from profiles
 -- (For users that exist in both tables, merge the data)
+-- This handles cases like kewadallay@gmail.com where user exists in both tables
 UPDATE public.users u
 SET
   avatar_url = COALESCE(u.avatar_url, p.avatar_url),
@@ -42,7 +47,7 @@ SET
   onboarding_completed = COALESCE(u.onboarding_completed, p.onboarding_completed),
   updated_at = GREATEST(u.updated_at, p.updated_at)
 FROM public.profiles p
-WHERE u.auth_user_id = p.id OR u.id = p.id;
+WHERE u.auth_user_id = p.id OR u.id = p.id OR u.email = p.email;
 
 -- Step 3: Verify migration
 -- This will fail if there are orphaned records
@@ -50,12 +55,14 @@ DO $$
 DECLARE
   orphaned_count INTEGER;
 BEGIN
-  -- Check for profiles not migrated to users
+  -- Check for profiles not migrated to users (by ID, auth_user_id, or email)
   SELECT COUNT(*) INTO orphaned_count
   FROM public.profiles p
   WHERE NOT EXISTS (
     SELECT 1 FROM public.users u
-    WHERE u.id = p.id OR u.auth_user_id = p.id
+    WHERE u.id = p.id
+       OR u.auth_user_id = p.id
+       OR u.email = p.email
   );
 
   IF orphaned_count > 0 THEN
