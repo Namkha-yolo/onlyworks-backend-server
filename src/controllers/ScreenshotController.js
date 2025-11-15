@@ -131,9 +131,6 @@ class ScreenshotController {
       throw new Error(`Failed to upload screenshot after ${maxRetries} attempts: ${lastError?.message}`);
     }
 
-    // Queue for AI analysis
-    this.queueForAnalysis(screenshot.id, screenshot.file_storage_key);
-
     res.status(201).json({
       success: true,
       data: screenshot,
@@ -273,47 +270,6 @@ class ScreenshotController {
     });
   });
 
-  // Helper method to queue screenshot for analysis
-  async queueForAnalysis(screenshotId, storageKey) {
-    try {
-      logger.info('Queuing screenshot for AI analysis', { screenshotId, storageKey });
-
-      // Trigger immediate individual analysis for each screenshot
-      // This ensures analysis happens even when batch threshold isn't reached
-      try {
-        const screenshot = await this.screenshotRepository.findById(screenshotId);
-        if (screenshot && storageKey) {
-          const analysisResult = await this.aiService.analyzeScreenshot(storageKey, {
-            window_title: screenshot.metadata?.window_title,
-            active_app: screenshot.metadata?.active_app || screenshot.active_app,
-            timestamp: screenshot.timestamp
-          });
-
-          // Store individual analysis results
-          if (analysisResult) {
-            await this.analysisRepository.createAnalysis(screenshotId, screenshot.user_id, analysisResult);
-
-            logger.info('Screenshot analyzed successfully', {
-              screenshotId,
-              activityDetected: analysisResult.activity_detected,
-              productivityScore: analysisResult.productivity_score
-            });
-          }
-        }
-      } catch (analysisError) {
-        logger.warn('Individual screenshot analysis failed, will be included in batch processing', {
-          screenshotId,
-          error: analysisError.message
-        });
-      }
-
-    } catch (error) {
-      logger.error('Failed to queue screenshot for analysis', {
-        error: error.message,
-        screenshotId
-      });
-    }
-  }
 }
 
 module.exports = ScreenshotController;

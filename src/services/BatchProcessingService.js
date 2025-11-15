@@ -122,33 +122,93 @@ class BatchProcessingService {
 
   async performGeminiAnalysis(screenshots, analysisType) {
     try {
-      // Use existing individual analyses from the screenshot_analysis table instead of re-analyzing images
-      const existingAnalyses = await this.getExistingScreenshotAnalyses(screenshots);
+      // Perform multi-image group analysis (15 images at once)
+      const groupAnalysis = await this.analyzeImageGroup(screenshots, analysisType);
 
-      if (existingAnalyses.length === 0) {
-        logger.warn('No existing screenshot analyses found, using fallback');
+      if (!groupAnalysis) {
+        logger.warn('Group image analysis failed, using fallback');
         return this.generateFallbackAnalysis(screenshots);
       }
 
-      // Create aggregate analysis from existing individual analyses
-      const aggregatePrompt = this.buildAggregateAnalysisPrompt(existingAnalyses, screenshots);
+      return groupAnalysis;
+
+    } catch (error) {
+      logger.error('Gemini group analysis failed', { error: error.message });
+      return this.generateFallbackAnalysis(screenshots);
+    }
+  }
+
+  async analyzeImageGroup(screenshots, analysisType) {
+    try {
+      logger.info(`Starting group analysis for ${screenshots.length} screenshots`);
+
+      // Sort screenshots chronologically
+      const sortedScreenshots = [...screenshots].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+      // Download all screenshot images
+      const imageData = [];
+      for (const screenshot of sortedScreenshots) {
+        try {
+          const image = await this.downloadScreenshotImage(screenshot.file_storage_key);
+          imageData.push({
+            screenshot,
+            imageBuffer: image,
+            timestamp: new Date(screenshot.created_at).toLocaleTimeString(),
+            activeApp: screenshot.active_app || 'Unknown'
+          });
+        } catch (downloadError) {
+          logger.warn(`Failed to download screenshot ${screenshot.id}`, { error: downloadError.message });
+        }
+      }
+
+      if (imageData.length === 0) {
+        throw new Error('No images could be downloaded for analysis');
+      }
+
+      // Create group analysis prompt
+      const groupPrompt = this.buildGroupAnalysisPrompt(imageData, analysisType);
+
+      // Prepare multi-image parts for Gemini
+      const imageParts = imageData.map((item, index) => ({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: item.imageBuffer.toString('base64')
+        }
+      }));
+
+      // Send to Gemini with all images
       const result = await this.model.generateContent({
-        contents: [{ role: "user", parts: [{ text: aggregatePrompt }] }],
+        contents: [{
+          role: "user",
+          parts: [
+            { text: groupPrompt },
+            ...imageParts
+          ]
+        }],
         generationConfig: {
           temperature: 0.3,
           topK: 40,
           topP: 0.8,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 3072,
         }
       });
 
       const response = await result.response;
       const analysisText = response.text();
+
+      logger.info('Group analysis completed successfully', {
+        screenshotCount: imageData.length,
+        responseLength: analysisText.length
+      });
+
+      // Store individual analysis results in database
+      await this.storeGroupAnalysisResults(imageData, analysisText);
+
       return this.parseGeminiResponse(analysisText, screenshots.length);
 
     } catch (error) {
-      logger.error('Gemini batch analysis failed', { error: error.message });
-      return this.generateFallbackAnalysis(screenshots);
+      logger.error('Group image analysis failed', { error: error.message, stack: error.stack });
+      throw error;
     }
   }
 
@@ -270,6 +330,152 @@ Respond in 2-3 sentences describing what you see.`;
     }
 
     return Buffer.from(await data.arrayBuffer());
+  }
+
+  buildGroupAnalysisPrompt(imageData, analysisType) {
+    const sessionDuration = imageData.length > 1
+      ? Math.round((new Date(imageData[imageData.length-1].screenshot.created_at) - new Date(imageData[0].screenshot.created_at)) / 1000 / 60)
+      : 0;
+
+    const imageList = imageData.map((item, index) =>
+      `Image ${index + 1}: [${item.timestamp}] ${item.activeApp}`
+    ).join('\n');
+
+    return `
+You are OnlyWorks AI, analyzing a work session with ${imageData.length} screenshots taken over ${sessionDuration} minutes.
+
+## TASK: Multi-Image Workflow Analysis
+Analyze these ${imageData.length} screenshots as a cohesive work session. Examine the visual content of each image to understand the user's workflow, tasks, and productivity patterns.
+
+## SCREENSHOTS IN THIS SESSION:
+${imageList}
+
+## ANALYSIS FRAMEWORK
+
+### 1. WORK CLARITY & PROGRESSION
+- What specific tasks were completed or progressed across these screenshots?
+- What applications/tools were used and for what purpose?
+- How did the work evolve from the first to the last screenshot?
+- What type of work is this? (coding, design, communication, research, debugging, meetings, documentation, writing, planning)
+
+### 2. WORKFLOW PATTERNS
+- What is the main workflow or project being worked on?
+- How much context switching occurred between different tools/tasks?
+- What was the user's focus and attention pattern?
+- Any signs of productivity, distraction, or breaks?
+
+### 3. CONTRIBUTION RECOGNITION
+- What value was delivered in this session?
+- What "invisible work" occurred? (research, planning, debugging, optimization, learning)
+- What problems were solved or progress was made?
+
+### 4. PRODUCTIVITY INSIGHTS
+- What were the most productive periods in this session?
+- Any efficiency insights or recommendations?
+- Overall productivity score (0-100) for this work session
+
+## RESPONSE FORMAT
+Provide a comprehensive analysis that covers:
+1. **Session Overview**: Main work focus and key accomplishments
+2. **Detailed Activity Breakdown**: What happened in each phase of the session
+3. **Productivity Assessment**: Strengths, challenges, and overall effectiveness
+4. **Workflow Insights**: Patterns, efficiency observations, and recommendations
+
+Be specific about what you can see in the visual content of each screenshot.
+`;
+  }
+
+  async storeGroupAnalysisResults(imageData, analysisText) {
+    try {
+      // Parse the analysis to extract individual screenshot insights
+      const { createClient } = require('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+      );
+
+      // For now, create a simple analysis entry for each screenshot
+      // In the future, we could parse the AI response to extract individual insights
+      const groupId = `group_${Date.now()}`;
+
+      for (const item of imageData) {
+        try {
+          const analysisData = {
+            screenshot_id: item.screenshot.id,
+            user_id: item.screenshot.user_id,
+            activity_detected: this.extractActivityFromGroupAnalysis(analysisText, item.activeApp),
+            productivity_score: this.extractProductivityScore(analysisText),
+            group_analysis_id: groupId,
+            group_analysis_text: analysisText.substring(0, 1000), // Store truncated version
+            analyzed_with_group: true,
+            created_at: new Date().toISOString()
+          };
+
+          const { error } = await supabase
+            .from('screenshot_analysis')
+            .insert(analysisData);
+
+          if (error) {
+            logger.warn(`Failed to store analysis for screenshot ${item.screenshot.id}`, { error: error.message });
+          }
+        } catch (storeError) {
+          logger.warn(`Error storing individual analysis for screenshot ${item.screenshot.id}`, { error: storeError.message });
+        }
+      }
+
+      logger.info('Group analysis results stored successfully', {
+        groupId,
+        screenshotCount: imageData.length
+      });
+
+    } catch (error) {
+      logger.error('Failed to store group analysis results', { error: error.message });
+    }
+  }
+
+  extractActivityFromGroupAnalysis(analysisText, defaultApp) {
+    // Simple extraction - look for common work activities in the analysis
+    const text = analysisText.toLowerCase();
+
+    if (text.includes('coding') || text.includes('programming') || text.includes('development')) {
+      return 'coding';
+    } else if (text.includes('design') || text.includes('creative')) {
+      return 'design';
+    } else if (text.includes('research') || text.includes('browsing') || text.includes('learning')) {
+      return 'research';
+    } else if (text.includes('writing') || text.includes('documentation') || text.includes('notes')) {
+      return 'writing';
+    } else if (text.includes('communication') || text.includes('email') || text.includes('chat')) {
+      return 'communication';
+    } else if (text.includes('meeting') || text.includes('video call')) {
+      return 'meeting';
+    } else {
+      return 'general_work';
+    }
+  }
+
+  extractProductivityScore(analysisText) {
+    // Look for productivity scores in the analysis text
+    const scoreMatch = analysisText.match(/productivity.*?(\d+)/i) ||
+                      analysisText.match(/score.*?(\d+)/i) ||
+                      analysisText.match(/(\d+)%/);
+
+    if (scoreMatch && scoreMatch[1]) {
+      const score = parseInt(scoreMatch[1]);
+      return Math.min(Math.max(score, 0), 100); // Ensure 0-100 range
+    }
+
+    // Default productivity score based on analysis sentiment
+    const text = analysisText.toLowerCase();
+    if (text.includes('highly productive') || text.includes('excellent')) {
+      return 85;
+    } else if (text.includes('productive') || text.includes('focused')) {
+      return 75;
+    } else if (text.includes('moderately') || text.includes('some progress')) {
+      return 65;
+    } else {
+      return 50; // Default moderate score
+    }
   }
 
   buildAggregateAnalysisPrompt(individualAnalyses, screenshots) {
