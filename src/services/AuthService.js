@@ -247,11 +247,31 @@ class AuthService {
 
   async createOrUpdateUser(userInfo) {
     try {
+      logger.info('Looking for existing user by email', {
+        email: userInfo.email?.substring(0, 10) + '...',
+        provider: userInfo.provider
+      });
+
       // Try to find existing user by email
-      let user = await this.userRepository.findByEmail(userInfo.email);
+      let user = null;
+      try {
+        user = await this.userRepository.findByEmail(userInfo.email);
+        logger.info('User lookup result', {
+          found: !!user,
+          userId: user?.id,
+          email: userInfo.email?.substring(0, 10) + '...'
+        });
+      } catch (findError) {
+        logger.warn('Error finding user by email, will try to create new user', {
+          error: findError.message,
+          email: userInfo.email?.substring(0, 10) + '...'
+        });
+        user = null; // Ensure user is null if lookup fails
+      }
 
       if (user) {
         // Update existing user using our new schema
+        logger.info('Updating existing user', { userId: user.id });
         user = await this.userRepository.update(user.id, {
           full_name: userInfo.name,
           picture_url: userInfo.avatar_url,
@@ -261,29 +281,60 @@ class AuthService {
           last_login_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
+        logger.info('User updated successfully', { userId: user.id });
       } else {
         // Create new user using our new schema structure
-        user = await this.userRepository.create({
-          email: userInfo.email,
-          full_name: userInfo.name,
-          picture_url: userInfo.avatar_url,
-          provider: userInfo.provider,
-          provider_id: userInfo.provider_id,
-          email_verified: userInfo.email_verified,
-          last_login_at: new Date().toISOString()
-          // Note: auth_user_id will be set by the database trigger
-        });
+        logger.info('Creating new user', { email: userInfo.email?.substring(0, 10) + '...' });
 
-        logger.info('New user created using desktop app schema', {
-          userId: user.id,
-          email: user.email,
-          provider: user.provider
-        });
+        try {
+          user = await this.userRepository.create({
+            email: userInfo.email,
+            full_name: userInfo.name,
+            picture_url: userInfo.avatar_url,
+            provider: userInfo.provider,
+            provider_id: userInfo.provider_id,
+            email_verified: userInfo.email_verified,
+            last_login_at: new Date().toISOString()
+            // Note: auth_user_id will be set by the database trigger
+          });
+
+          logger.info('New user created successfully', {
+            userId: user.id,
+            email: userInfo.email?.substring(0, 10) + '...',
+            provider: user.provider
+          });
+        } catch (createError) {
+          // If creation fails due to duplicate, try to find and update the user
+          if (createError.code === '23505') { // PostgreSQL unique constraint violation
+            logger.warn('User creation failed due to duplicate, attempting to find and update existing user');
+            user = await this.userRepository.findByEmail(userInfo.email);
+            if (user) {
+              user = await this.userRepository.update(user.id, {
+                full_name: userInfo.name,
+                picture_url: userInfo.avatar_url,
+                provider: userInfo.provider,
+                provider_id: userInfo.provider_id,
+                email_verified: userInfo.email_verified,
+                last_login_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
+              logger.info('Successfully updated user after duplicate creation attempt', { userId: user.id });
+            } else {
+              throw createError; // Re-throw if we still can't find the user
+            }
+          } else {
+            throw createError; // Re-throw non-duplicate errors
+          }
+        }
       }
 
       return user;
     } catch (error) {
-      logger.error('Error creating/updating user', { error: error.message, userInfo });
+      logger.error('Error in createOrUpdateUser', {
+        error: error.message,
+        code: error.code,
+        email: userInfo?.email?.substring(0, 10) + '...'
+      });
       throw error;
     }
   }
