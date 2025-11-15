@@ -53,12 +53,17 @@ class ScreenshotController {
         });
       }
 
-      // Use upload result data
+      // Use upload result data and add required database fields
       finalScreenshotData = {
         ...finalScreenshotData,
         file_storage_key: uploadResult.data.path,
         file_size_bytes: uploadedFile.size,
-        public_url: uploadResult.data.publicUrl
+        file_size: uploadedFile.size, // Map to both columns
+        public_url: uploadResult.data.publicUrl,
+        filename: fileName,
+        file_path: uploadResult.data.path, // Use storage path as file_path
+        storage_path: uploadResult.data.path,
+        file_type: uploadedFile.mimetype
       };
     } else {
       // Validate required fields for metadata-only uploads

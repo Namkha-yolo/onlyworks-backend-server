@@ -6,17 +6,24 @@ class ScreenshotRepository extends BaseRepository {
   }
 
   async createScreenshot(userId, sessionId, screenshotData) {
-    // Use session_id as per actual database schema
+    // Map to actual database schema columns from screenshots table
     const createData = {
       user_id: userId,
-      session_id: sessionId,
+      session_id: sessionId, // Correct: matches schema
+
+      // File storage fields - these exist in schema
       file_storage_key: screenshotData.file_storage_key,
       file_size_bytes: screenshotData.file_size_bytes,
+      filename: screenshotData.filename, // Add missing filename field
+      file_path: screenshotData.file_path, // Add missing file_path field
+      storage_path: screenshotData.storage_path, // Add missing storage_path field
+      file_size: screenshotData.file_size_bytes, // Map to both file_size and file_size_bytes
+      file_type: screenshotData.file_type || 'image/png',
+
+      // Required action_type field (NOT NULL in schema)
       action_type: screenshotData.action_type || 'manual',
-      timestamp: screenshotData.timestamp || new Date().toISOString(),
-      window_title: screenshotData.window_title,
-      active_app: screenshotData.active_app,
-      capture_trigger: screenshotData.capture_trigger || 'timer_15s',
+
+      // Mouse and screen data
       mouse_x: screenshotData.click_x || screenshotData.mouse_x,
       mouse_y: screenshotData.click_y || screenshotData.mouse_y,
       click_coordinates: screenshotData.click_x && screenshotData.click_y
@@ -24,8 +31,21 @@ class ScreenshotRepository extends BaseRepository {
         : null,
       screen_width: screenshotData.screen_width,
       screen_height: screenshotData.screen_height,
+
+      // Application context
+      active_app: screenshotData.active_app,
+      capture_trigger: screenshotData.capture_trigger || 'timer_15s',
+
+      // Interaction data
       interaction_type: screenshotData.interaction_type,
-      interaction_data: screenshotData.interaction_data
+      interaction_data: screenshotData.interaction_data,
+
+      // Metadata and timestamps - note: no direct timestamp column, use created_at/updated_at
+      metadata: {
+        timestamp: screenshotData.timestamp || new Date().toISOString(),
+        window_title: screenshotData.window_title,
+        ...screenshotData.metadata
+      }
     };
 
     // Emergency conflict handling - try with different file storage keys if conflicts occur
@@ -34,25 +54,70 @@ class ScreenshotRepository extends BaseRepository {
       try {
         return await this.create(createData);
       } catch (error) {
-        // Check if it's a unique constraint violation (likely on file_storage_key)
-        if ((error.code === '23505' || error.message.includes('duplicate') || error.message.includes('unique')) && attempt < maxRetries) {
-          console.warn(`Unique constraint violation on attempt ${attempt}, retrying with modified key...`);
+        // Enhanced error logging to identify the exact constraint violation
+        console.error(`Screenshot creation attempt ${attempt} failed:`, {
+          errorCode: error.code,
+          errorMessage: error.message,
+          errorDetail: error.detail,
+          constraint: error.constraint,
+          table: error.table,
+          column: error.column,
+          createDataKeys: Object.keys(createData),
+          fileStorageKey: createData.file_storage_key
+        });
 
-          // Modify file_storage_key to make it unique
+        // Check if it's a unique constraint violation
+        if ((error.code === '23505' || error.message.includes('duplicate') || error.message.includes('unique')) && attempt < maxRetries) {
+          console.warn(`Unique constraint violation on attempt ${attempt}:`, {
+            constraint: error.constraint,
+            detail: error.detail
+          });
+
+          // Modify multiple fields to ensure uniqueness
+          const timestamp = Date.now();
+          const randomSuffix = `_${timestamp}_${attempt}_${Math.random().toString(36).substring(2, 6)}`;
+
+          // Modify file storage key
           if (createData.file_storage_key) {
             const parts = createData.file_storage_key.split('.');
             if (parts.length > 1) {
-              parts[parts.length - 2] += `_${Date.now()}_${attempt}`;
+              parts[parts.length - 2] += randomSuffix;
               createData.file_storage_key = parts.join('.');
             } else {
-              createData.file_storage_key += `_${Date.now()}_${attempt}`;
+              createData.file_storage_key += randomSuffix;
             }
           }
 
-          // Also add slight timestamp variation to ensure uniqueness
-          const now = new Date();
-          now.setMilliseconds(now.getMilliseconds() + attempt);
-          createData.timestamp = now.toISOString();
+          // Modify filename if present
+          if (createData.filename) {
+            const parts = createData.filename.split('.');
+            if (parts.length > 1) {
+              parts[parts.length - 2] += randomSuffix;
+              createData.filename = parts.join('.');
+            } else {
+              createData.filename += randomSuffix;
+            }
+          }
+
+          // Modify file paths
+          if (createData.file_path) {
+            createData.file_path += randomSuffix;
+          }
+          if (createData.storage_path) {
+            createData.storage_path += randomSuffix;
+          }
+
+          // Update metadata timestamp
+          if (createData.metadata) {
+            createData.metadata.timestamp = new Date().toISOString();
+            createData.metadata.retry_attempt = attempt;
+          }
+
+          console.log(`Retrying with modified data:`, {
+            newFileStorageKey: createData.file_storage_key,
+            newFilename: createData.filename,
+            attempt: attempt
+          });
 
           continue; // Try again with modified data
         }
