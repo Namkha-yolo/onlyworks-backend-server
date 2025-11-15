@@ -11,11 +11,25 @@ function authenticateUser(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
 
+    logger.debug('[Auth] Authentication attempt', {
+      hasAuthHeader: !!authHeader,
+      authHeaderPreview: authHeader ? authHeader.substring(0, 20) + '...' : null,
+      url: req.originalUrl,
+      method: req.method
+    });
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      logger.debug('[Auth] No valid auth header found');
       throw new ApiError('AUTH_REQUIRED');
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+    logger.debug('[Auth] Token extracted', {
+      tokenLength: token.length,
+      tokenPreview: token.substring(0, 20) + '...',
+      tokenSuffix: token.slice(-20)
+    });
 
     // DEMO DAY BYPASS - Accept tokens with development signature for demo user
     if (token.endsWith('.development-signature')) {
@@ -62,8 +76,20 @@ function authenticateUser(req, res, next) {
 
     const jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
 
+    logger.debug('[Auth] JWT verification attempt', {
+      jwtSecretExists: !!process.env.JWT_SECRET,
+      jwtSecretLength: jwtSecret.length,
+      jwtSecretPreview: jwtSecret.substring(0, 10) + '...'
+    });
+
     // Verify JWT token
     const decoded = jwt.verify(token, jwtSecret);
+
+    logger.debug('[Auth] JWT verification successful', {
+      userId: decoded.userId,
+      email: decoded.email,
+      provider: decoded.provider
+    });
 
     req.user = {
       userId: decoded.userId,
@@ -130,6 +156,14 @@ function authenticateUser(req, res, next) {
 
     next();
   } catch (error) {
+    logger.debug('[Auth] Authentication failed with error', {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorStack: error.stack,
+      url: req.originalUrl,
+      method: req.method
+    });
+
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
       logger.security('authentication_failed', {
         error: 'Invalid or expired token',
