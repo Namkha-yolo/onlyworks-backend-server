@@ -12,8 +12,8 @@ class BaseRepository {
     try {
       const startTime = Date.now();
 
-      // Use admin client for users table to bypass RLS policies
-      const client = this.tableName === 'users' && this.supabaseAdmin
+      // Use admin client for users and screenshot_sessions tables to bypass RLS policies
+      const client = (this.tableName === 'users' || this.tableName === 'screenshot_sessions') && this.supabaseAdmin
         ? this.supabaseAdmin
         : this.supabase;
 
@@ -115,8 +115,8 @@ class BaseRepository {
     try {
       const startTime = Date.now();
 
-      // Use admin client for users table to bypass RLS policies
-      const client = this.tableName === 'users' && this.supabaseAdmin
+      // Use admin client for users and screenshot_sessions tables to bypass RLS policies
+      const client = (this.tableName === 'users' || this.tableName === 'screenshot_sessions') && this.supabaseAdmin
         ? this.supabaseAdmin
         : this.supabase;
 
