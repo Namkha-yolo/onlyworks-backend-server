@@ -28,7 +28,39 @@ class ScreenshotRepository extends BaseRepository {
       interaction_data: screenshotData.interaction_data
     };
 
-    return await this.create(createData);
+    // Emergency conflict handling - try with different file storage keys if conflicts occur
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.create(createData);
+      } catch (error) {
+        // Check if it's a unique constraint violation (likely on file_storage_key)
+        if ((error.code === '23505' || error.message.includes('duplicate') || error.message.includes('unique')) && attempt < maxRetries) {
+          console.warn(`Unique constraint violation on attempt ${attempt}, retrying with modified key...`);
+
+          // Modify file_storage_key to make it unique
+          if (createData.file_storage_key) {
+            const parts = createData.file_storage_key.split('.');
+            if (parts.length > 1) {
+              parts[parts.length - 2] += `_${Date.now()}_${attempt}`;
+              createData.file_storage_key = parts.join('.');
+            } else {
+              createData.file_storage_key += `_${Date.now()}_${attempt}`;
+            }
+          }
+
+          // Also add slight timestamp variation to ensure uniqueness
+          const now = new Date();
+          now.setMilliseconds(now.getMilliseconds() + attempt);
+          createData.timestamp = now.toISOString();
+
+          continue; // Try again with modified data
+        }
+
+        // If not a unique constraint violation or max retries reached, throw the error
+        throw error;
+      }
+    }
   }
 
   async findBySession(sessionId, userId) {
