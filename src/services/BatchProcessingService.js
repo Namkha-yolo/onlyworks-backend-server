@@ -28,7 +28,9 @@ class BatchProcessingService {
       logger.info('Starting batch processing', { userId, sessionId, batchSize, analysisType });
 
       // Get recent screenshots for the session
+      logger.info('Attempting to find screenshots by session', { sessionId, userId, batchSize });
       const screenshots = await this.screenshotRepo.findBySession(sessionId, userId, { limit: batchSize });
+      logger.info('Screenshots found', { count: screenshots.length, sessionId });
 
       if (screenshots.length === 0) {
         throw new ApiError('NO_SCREENSHOTS', { message: 'No screenshots found for batch processing' });
@@ -49,6 +51,7 @@ class BatchProcessingService {
       try {
         const screenshotIds = screenshots.map(s => s.id);
         const batchNumber = Math.floor(Date.now() / 1000);
+        logger.info('Creating batch report', { screenshotIds, batchNumber, sessionId });
 
         batchReport = await this.batchReportRepo.create({
           session_id: sessionId,
@@ -106,7 +109,13 @@ class BatchProcessingService {
 
     } catch (error) {
       if (error instanceof ApiError) throw error;
-      logger.error('Batch processing failed', { error: error.message, userId, sessionId });
+      logger.error('Batch processing failed', {
+        error: error.message,
+        stack: error.stack,
+        userId,
+        sessionId,
+        errorType: error.constructor.name
+      });
       throw new ApiError('BATCH_PROCESSING_FAILED', { operation: 'trigger_batch_processing' });
     }
   }
