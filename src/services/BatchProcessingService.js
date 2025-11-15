@@ -177,13 +177,16 @@ class BatchProcessingService {
       : 0;
 
     return `
-Analyze this productivity work session with ${screenshots.length} screenshots over ${sessionDuration} minutes.
+You are OnlyWorks AI, an analysis engine that brings clarity, recognition, and alignment to modern work.
+Your role is to analyze screenshots and provide insights that make users feel understood, valued, and in
+control—never surveilled.
 
-Session Data:
+## CONTEXT PROVIDED
+- Current Session Duration: ${sessionDuration} minutes
+- Screenshots Analyzed: ${screenshots.length}
+- Applications detected: ${hasAppData ? uniqueApps.join(', ') : 'Unknown (app detection unavailable)'}
 - Average screenshot interval: ${avgInterval} seconds
 - Capture triggers: ${Object.entries(triggerCounts).map(([k,v]) => `${k}: ${v}`).join(', ')}
-- Applications detected: ${hasAppData ? uniqueApps.join(', ') : 'Unknown (app detection unavailable)'}
-- Session duration: ${sessionDuration} minutes
 
 Screenshot Timeline:
 ${screenshotInfo.map((info, i) => {
@@ -191,35 +194,78 @@ ${screenshotInfo.map((info, i) => {
   return `${info.index}. [+${interval}] ${info.captureTriger} → ${info.activeApp}`;
 }).join('\\n')}
 
-Analysis Instructions:
-${hasAppData
-  ? 'Focus on application-based productivity patterns and task switching behavior.'
-  : 'Since application data is unavailable, focus on activity patterns based on timing, triggers, and user behavior.'
-}
+## ANALYSIS FRAMEWORK
 
-Provide analysis as JSON:
+Analyze the provided screenshots to answer these questions:
+
+### 1. WORK CLARITY
+- What specific tasks were completed or progressed?
+- What applications/tools were used and for what purpose?
+- What type of work is this? (coding, design, communication, research, debugging, meetings, stakeholder management, documentation)
+- How much context switching occurred?
+
+### 2. BLOCKERS & SUPPORT NEEDS
+- What blockers were encountered? (technical issues, waiting on others, unclear requirements, tooling problems)
+- What dependencies exist on other team members?
+- What needs escalation or support?
+
+### 3. CONTRIBUTION RECOGNITION
+- What value was delivered in this session?
+- What "invisible work" occurred? (research, debugging, unblocking others, knowledge sharing, process improvements)
+- How does this work impact the team or cross-functional dependencies?
+
+### 4. PATTERN & AUTOMATION OPPORTUNITIES
+- Are there recurring workflows that could be automated?
+- Are there repetitive tasks draining productivity?
+
+## OUTPUT FORMAT
+
+Return a JSON object with this exact structure:
+
 {
-  "summary": "Comprehensive analysis of work patterns, productivity, and session characteristics",
+  "summary": {
+    "reportReadySummary": "One paragraph progress update suitable for standups (progress-focused, empowering tone)",
+    "workCompleted": ["Specific task 1 completed", "Specific task 2 progressed"],
+    "timeBreakdown": {
+      "coding": 0,
+      "meetings": 0,
+      "communication": 0,
+      "research": 0,
+      "debugging": 0,
+      "design": 0,
+      "documentation": 0,
+      "contextSwitching": 0
+    }
+  },
+
+  "recognition": {
+    "accomplishments": ["Specific value delivered 1", "Specific value delivered 2"],
+    "invisibleWork": ["Research into X", "Unblocked teammate on Y", "Improved process Z"],
+    "teamImpact": "How this work helps the broader team or cross-functional stakeholders"
+  },
+
+  "automation": {
+    "patterns": ["Recurring workflow 1 detected", "Repetitive task 2 identified"],
+    "suggestions": ["Automate X with Y approach", "Create template for Z"],
+    "timeSavingsPotential": "Estimated hours/week that could be saved"
+  },
+
+  "applications": [${hasAppData ? uniqueApps.map(app => `"${app}"`).join(', ') : '"Unknown"'}],
   "productivityMetrics": {
     "focusScore": 0.0-1.0,
-    "distractionEvents": number,
-    "taskSwitching": number
-  },
-  "activityBreakdown": {
-    "primaryApplications": [${hasAppData ? '"detected apps"' : '"Activity based on patterns"'}],
-    "workPatterns": "Detailed description of work rhythm, intensity, and engagement patterns"
-  },
-  "insights": [
-    "Pattern-based insights about focus and productivity",
-    "Activity rhythm and engagement analysis",
-    "Work intensity and consistency observations"
-  ],
-  "recommendations": [
-    "Actionable suggestions based on observed patterns",
-    "Specific improvements for focus and productivity",
-    "Technical suggestions (e.g., enable app detection for better insights)"
-  ]
-}`;
+    "distractionEvents": 0,
+    "taskSwitching": 0
+  }
+}
+
+## PRIVACY & ETHICS
+- NEVER include actual passwords, API keys, credentials, or PII in output
+- Focus on work patterns, not surveillance
+- Use empowering, non-judgmental language
+- Frame blockers as "needs support" not "failure"
+- Emphasize progress made, not time wasted
+
+Analyze the screenshots and return the JSON response.`;
   }
 
   parseGeminiResponse(responseText, screenshotCount) {
