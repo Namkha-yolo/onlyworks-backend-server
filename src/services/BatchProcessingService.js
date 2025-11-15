@@ -122,9 +122,36 @@ class BatchProcessingService {
 
   async performGeminiAnalysis(screenshots, analysisType) {
     try {
-      const prompt = this.buildAnalysisPrompt(screenshots, analysisType);
+      // Step 1: Analyze individual screenshots with vision
+      const individualAnalyses = [];
+      for (const screenshot of screenshots) {
+        if (screenshot.file_storage_key) {
+          try {
+            const analysis = await this.analyzeIndividualScreenshot(screenshot);
+            individualAnalyses.push({
+              ...analysis,
+              screenshot_id: screenshot.id,
+              timestamp: screenshot.created_at,
+              active_app: screenshot.active_app
+            });
+          } catch (error) {
+            logger.warn('Failed to analyze individual screenshot', {
+              screenshotId: screenshot.id,
+              error: error.message
+            });
+          }
+        }
+      }
+
+      if (individualAnalyses.length === 0) {
+        logger.warn('No screenshots were successfully analyzed, using fallback');
+        return this.generateFallbackAnalysis(screenshots);
+      }
+
+      // Step 2: Create aggregate analysis from individual analyses
+      const aggregatePrompt = this.buildAggregateAnalysisPrompt(individualAnalyses, screenshots);
       const result = await this.model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        contents: [{ role: "user", parts: [{ text: aggregatePrompt }] }],
         generationConfig: {
           temperature: 0.3,
           topK: 40,
@@ -138,9 +165,158 @@ class BatchProcessingService {
       return this.parseGeminiResponse(analysisText, screenshots.length);
 
     } catch (error) {
-      logger.error('Gemini analysis failed', { error: error.message });
+      logger.error('Gemini batch analysis failed', { error: error.message });
       return this.generateFallbackAnalysis(screenshots);
     }
+  }
+
+  async analyzeIndividualScreenshot(screenshot) {
+    try {
+      // Get screenshot image from Supabase storage
+      const imageData = await this.downloadScreenshotImage(screenshot.file_storage_key);
+
+      const prompt = `Analyze this screenshot and describe what the user was doing. Be specific about:
+1. What application/tool is being used
+2. What specific task or activity is happening
+3. What content is visible (code, documents, websites, etc.)
+4. Any specific work being done
+
+Respond in 2-3 sentences describing what you see.`;
+
+      const result = await this.model.generateContent({
+        contents: [{
+          role: "user",
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: "image/jpeg",
+                data: imageData.toString('base64')
+              }
+            }
+          ]
+        }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 200,
+        }
+      });
+
+      const response = await result.response;
+      return {
+        description: response.text(),
+        analyzed_with_vision: true
+      };
+    } catch (error) {
+      logger.warn('Individual screenshot analysis failed', { error: error.message });
+      return {
+        description: `User was working in ${screenshot.active_app || 'unknown application'}`,
+        analyzed_with_vision: false
+      };
+    }
+  }
+
+  async downloadScreenshotImage(storageKey) {
+    // Download image from Supabase storage
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    const { data, error } = await supabase.storage
+      .from('screenshots')
+      .download(storageKey);
+
+    if (error) {
+      throw new Error(`Failed to download screenshot: ${error.message}`);
+    }
+
+    return Buffer.from(await data.arrayBuffer());
+  }
+
+  buildAggregateAnalysisPrompt(individualAnalyses, screenshots) {
+    const sessionDuration = screenshots.length > 1
+      ? Math.round((new Date(screenshots[screenshots.length-1].created_at) - new Date(screenshots[0].created_at)) / 1000 / 60)
+      : 0;
+
+    const analysisText = individualAnalyses.map((analysis, index) => {
+      const timestamp = new Date(analysis.timestamp).toLocaleTimeString();
+      return `${index + 1}. [${timestamp}] ${analysis.active_app || 'Unknown'}: ${analysis.description}`;
+    }).join('\n');
+
+    return `
+You are OnlyWorks AI, analyzing a work session with ${screenshots.length} screenshots over ${sessionDuration} minutes.
+
+Individual Screenshot Analysis:
+${analysisText}
+
+Based on these individual screenshot analyses, provide a comprehensive summary following the OnlyWorks framework:
+
+## ANALYSIS FRAMEWORK
+
+### 1. WORK CLARITY
+- What specific tasks were completed or progressed?
+- What applications/tools were used and for what purpose?
+- What type of work is this? (coding, design, communication, research, debugging, meetings, stakeholder management, documentation)
+- How much context switching occurred?
+
+### 2. CONTRIBUTION RECOGNITION
+- What value was delivered in this session?
+- What "invisible work" occurred? (research, debugging, unblocking others, knowledge sharing, process improvements)
+- How does this work impact the team or cross-functional dependencies?
+
+### 3. PATTERN & AUTOMATION OPPORTUNITIES
+- Are there recurring workflows that could be automated?
+- Are there repetitive tasks draining productivity?
+
+## OUTPUT FORMAT
+
+Return a JSON object with this exact structure:
+
+{
+  "summary": {
+    "reportReadySummary": "One paragraph progress update suitable for standups (progress-focused, empowering tone)",
+    "workCompleted": ["Specific task 1 completed", "Specific task 2 progressed"],
+    "timeBreakdown": {
+      "coding": 0,
+      "meetings": 0,
+      "communication": 0,
+      "research": 0,
+      "debugging": 0,
+      "design": 0,
+      "documentation": 0,
+      "contextSwitching": 0
+    }
+  },
+
+  "recognition": {
+    "accomplishments": ["Specific value delivered 1", "Specific value delivered 2"],
+    "invisibleWork": ["Research into X", "Unblocked teammate on Y", "Improved process Z"],
+    "teamImpact": "How this work helps the broader team or cross-functional stakeholders"
+  },
+
+  "automation": {
+    "patterns": ["Recurring workflow 1 detected", "Repetitive task 2 identified"],
+    "suggestions": ["Automate X with Y approach", "Create template for Z"],
+    "timeSavingsPotential": "Estimated hours/week that could be saved"
+  },
+
+  "applications": ["app1", "app2"],
+  "productivityMetrics": {
+    "focusScore": 0.0-1.0,
+    "distractionEvents": 0,
+    "taskSwitching": 0
+  }
+}
+
+## PRIVACY & ETHICS
+- NEVER include actual passwords, API keys, credentials, or PII in output
+- Focus on work patterns, not surveillance
+- Use empowering, non-judgmental language
+- Emphasize progress made, not time wasted
+
+Analyze the work session and return the JSON response.`;
   }
 
   buildAnalysisPrompt(screenshots, analysisType) {
