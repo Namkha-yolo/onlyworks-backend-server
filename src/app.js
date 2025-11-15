@@ -185,7 +185,7 @@ app.get('/api/test/session-stats', async (req, res) => {
 });
 
 // Emergency test upload endpoint (no auth required for testing)
-app.post('/api/test/upload', upload.single('screenshot'), async (req, res) => {
+app.post('/api/test/upload', async (req, res) => {
   try {
     const ScreenshotRepository = require('./repositories/ScreenshotRepository');
     const FileStorageService = require('./services/FileStorageService');
