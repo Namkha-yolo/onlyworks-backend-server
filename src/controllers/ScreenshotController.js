@@ -205,9 +205,6 @@ class ScreenshotController {
       // Store analysis results
       const analysis = await this.analysisRepository.createAnalysis(screenshotId, userId, analysisResult);
 
-      // Mark screenshot as analyzed
-      await this.screenshotRepository.markAnalysisCompleted(screenshotId, userId);
-
       logger.business('screenshot_analyzed', {
         user_id: userId,
         screenshot_id: screenshotId,
@@ -295,7 +292,6 @@ class ScreenshotController {
           // Store individual analysis results
           if (analysisResult) {
             await this.analysisRepository.createAnalysis(screenshotId, screenshot.user_id, analysisResult);
-            await this.screenshotRepository.markAnalysisCompleted(screenshotId, screenshot.user_id);
 
             logger.info('Screenshot analyzed successfully', {
               screenshotId,
