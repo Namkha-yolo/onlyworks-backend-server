@@ -1,9 +1,13 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateUser } = require('../middleware/auth');
 const AnalysisStorageService = require('../services/AnalysisStorageService');
 
 // Create analysis storage service instance
 const analysisService = new AnalysisStorageService();
+
+// Protect all analysis routes with authentication
+router.use(authenticateUser);
 
 /**
  * Store a batch analysis (every 30 screenshots)
@@ -11,7 +15,14 @@ const analysisService = new AnalysisStorageService();
  */
 router.post('/batch', async (req, res) => {
     try {
-        const batchData = req.body;
+        // Extract userId from authenticated user (guaranteed by middleware)
+        const { userId } = req.user;
+
+        // Add user_id to batch data from authenticated source only
+        const batchData = {
+            ...req.body,
+            user_id: userId
+        };
 
         // Validate required fields
         if (!batchData.session_id || !batchData.screenshot_ids || !batchData.analysis_results) {
@@ -24,7 +35,7 @@ router.post('/batch', async (req, res) => {
             });
         }
 
-        console.log(`[AnalysisAPI] Storing batch analysis for session ${batchData.session_id}, batch #${batchData.batch_number}`);
+        console.log(`[AnalysisAPI] Storing batch analysis for session ${batchData.session_id}, batch #${batchData.batch_number}, user ${userId}`);
 
         const result = await analysisService.storeBatchAnalysis(batchData);
 
@@ -51,7 +62,14 @@ router.post('/batch', async (req, res) => {
  */
 router.post('/final', async (req, res) => {
     try {
-        const finalData = req.body;
+        // Extract userId from authenticated user (guaranteed by middleware)
+        const { userId } = req.user;
+
+        // Add user_id to final data from authenticated source only
+        const finalData = {
+            ...req.body,
+            user_id: userId
+        };
 
         // Validate required fields
         if (!finalData.session_id || !finalData.combined_analysis) {
@@ -64,7 +82,7 @@ router.post('/final', async (req, res) => {
             });
         }
 
-        console.log(`[AnalysisAPI] Storing final analysis for session ${finalData.session_id}`);
+        console.log(`[AnalysisAPI] Storing final analysis for session ${finalData.session_id}, user ${userId}`);
         console.log(`[AnalysisAPI] Combines ${finalData.total_batches} batches, ${finalData.total_screenshots} screenshots`);
 
         const result = await analysisService.storeFinalAnalysis(finalData);
