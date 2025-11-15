@@ -10,6 +10,7 @@ const { checkDatabaseConnection } = require('./config/database');
 
 // Route imports
 const authRoutes = require('./routes/authRoutes');
+const desktopOAuthRoutes = require('./routes/desktopOAuthRoutes');
 const userRoutes = require('./routes/userRoutes');
 const workSessionRoutes = require('./routes/workSessionRoutes');
 const screenshotRoutes = require('./routes/screenshotRoutes');
@@ -90,6 +91,7 @@ app.get('/health', async (req, res) => {
 
 // API routes
 app.use('/api/auth', authRoutes);
+app.use('/oauth', desktopOAuthRoutes); // Desktop OAuth routes
 app.use('/api/users', userRoutes);
 app.use('/api/sessions', workSessionRoutes);
 app.use('/api/screenshots', screenshotRoutes);
