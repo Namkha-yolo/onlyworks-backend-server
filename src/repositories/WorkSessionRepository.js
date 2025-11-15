@@ -89,7 +89,19 @@ class WorkSessionRepository extends BaseRepository {
 
   async getSessionById(sessionId, userId) {
     try {
-      const { data, error } = await this.supabase
+      const { logger } = require('../utils/logger');
+
+      // Use admin client for screenshot_sessions table to bypass RLS policies
+      const client = this.supabaseAdmin || this.supabase;
+
+      logger.info('Getting session by ID', {
+        sessionId,
+        userId,
+        tableName: this.tableName,
+        usingAdminClient: !!(this.supabaseAdmin)
+      });
+
+      const { data, error } = await client
         .from(this.tableName)
         .select('*')
         .eq('id', sessionId)
@@ -97,11 +109,28 @@ class WorkSessionRepository extends BaseRepository {
         .single();
 
       if (error && error.code !== 'PGRST116') {
+        logger.error('Error in getSessionById', {
+          error: error.message,
+          code: error.code,
+          sessionId,
+          userId
+        });
         throw error;
       }
 
+      logger.info('Session retrieved successfully', {
+        sessionId,
+        userId,
+        found: !!data
+      });
       return data;
     } catch (error) {
+      const { logger } = require('../utils/logger');
+      logger.error('Exception in getSessionById', {
+        error: error.message,
+        sessionId,
+        userId
+      });
       throw error;
     }
   }

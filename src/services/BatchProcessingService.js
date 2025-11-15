@@ -144,7 +144,10 @@ class BatchProcessingService {
   }
 
   buildAnalysisPrompt(screenshots, analysisType) {
-    const screenshotInfo = screenshots.map((screenshot, index) => ({
+    // Sort screenshots by timestamp (oldest first) for proper time calculation
+    const sortedScreenshots = [...screenshots].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    const screenshotInfo = sortedScreenshots.map((screenshot, index) => ({
       index: index + 1,
       timestamp: new Date(screenshot.created_at).toISOString(),
       captureTriger: screenshot.capture_trigger || 'unknown',
@@ -156,7 +159,9 @@ class BatchProcessingService {
     for (let i = 1; i < screenshotInfo.length; i++) {
       const prevTime = new Date(screenshotInfo[i-1].timestamp);
       const currTime = new Date(screenshotInfo[i].timestamp);
-      timeSpans.push(Math.round((currTime - prevTime) / 1000)); // seconds
+      const intervalSeconds = Math.round((currTime - prevTime) / 1000);
+      // Ensure positive intervals and cap at reasonable maximum (30 minutes)
+      timeSpans.push(Math.max(0, Math.min(intervalSeconds, 1800)));
     }
 
     const avgInterval = timeSpans.length > 0 ? Math.round(timeSpans.reduce((a, b) => a + b, 0) / timeSpans.length) : 0;
