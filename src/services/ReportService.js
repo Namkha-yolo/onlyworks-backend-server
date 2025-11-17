@@ -1,7 +1,6 @@
 const WorkSessionRepository = require('../repositories/WorkSessionRepository');
 const GoalRepository = require('../repositories/GoalRepository');
 const TeamRepository = require('../repositories/TeamRepository');
-const ScreenshotAnalysisRepository = require('../repositories/ScreenshotAnalysisRepository');
 const { ApiError } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -11,7 +10,6 @@ class ReportService {
     this.workSessionRepo = new WorkSessionRepository();
     this.goalRepo = new GoalRepository();
     this.teamRepo = new TeamRepository();
-    this.analysisRepo = new ScreenshotAnalysisRepository();
 
     // Initialize AI if API key is available
     this.genAI = null;

@@ -203,9 +203,6 @@ class BatchProcessingService {
         responseLength: analysisText.length
       });
 
-      // Store individual analysis results in database
-      await this.storeGroupAnalysisResults(imageData, analysisText);
-
       return this.parseGeminiResponse(analysisText, screenshots.length);
 
     } catch (error) {
@@ -214,106 +211,7 @@ class BatchProcessingService {
     }
   }
 
-  async getExistingScreenshotAnalyses(screenshots) {
-    try {
-      // Get existing analyses from the screenshot_analysis table
-      const { createClient } = require('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
 
-      const screenshotIds = screenshots.map(s => s.id).filter(Boolean);
-
-      if (screenshotIds.length === 0) {
-        return [];
-      }
-
-      const { data, error } = await supabase
-        .from('screenshot_analysis')
-        .select('screenshot_id, activity_detected, productivity_score, detected_apps, detected_tasks')
-        .in('screenshot_id', screenshotIds)
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        logger.warn('Failed to fetch existing analyses', { error: error.message });
-        return [];
-      }
-
-      // Match analyses with screenshot data
-      const analyses = [];
-      for (const analysis of data || []) {
-        const screenshot = screenshots.find(s => s.id === analysis.screenshot_id);
-        if (screenshot) {
-          analyses.push({
-            screenshot_id: analysis.screenshot_id,
-            timestamp: screenshot.created_at,
-            active_app: screenshot.active_app,
-            description: `User was doing ${analysis.activity_detected} (${Math.round(analysis.productivity_score)}% productive)${analysis.detected_apps ? ` using ${analysis.detected_apps.map(app => app.name).join(', ')}` : ''}`,
-            analyzed_with_existing_data: true,
-            activity_detected: analysis.activity_detected,
-            productivity_score: analysis.productivity_score
-          });
-        }
-      }
-
-      logger.info('Retrieved existing screenshot analyses', {
-        found: analyses.length,
-        requested: screenshots.length
-      });
-
-      return analyses;
-    } catch (error) {
-      logger.warn('Failed to get existing analyses', { error: error.message });
-      return [];
-    }
-  }
-
-  async analyzeIndividualScreenshot(screenshot) {
-    try {
-      // Get screenshot image from Supabase storage
-      const imageData = await this.downloadScreenshotImage(screenshot.file_storage_key);
-
-      const prompt = `Analyze this screenshot and describe what the user was doing. Be specific about:
-1. What application/tool is being used
-2. What specific task or activity is happening
-3. What content is visible (code, documents, websites, etc.)
-4. Any specific work being done
-
-Respond in 2-3 sentences describing what you see.`;
-
-      const result = await this.model.generateContent({
-        contents: [{
-          role: "user",
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: imageData.toString('base64')
-              }
-            }
-          ]
-        }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 200,
-        }
-      });
-
-      const response = await result.response;
-      return {
-        description: response.text(),
-        analyzed_with_vision: true
-      };
-    } catch (error) {
-      logger.warn('Individual screenshot analysis failed', { error: error.message });
-      return {
-        description: `User was working in ${screenshot.active_app || 'unknown application'}`,
-        analyzed_with_vision: false
-      };
-    }
-  }
 
   async downloadScreenshotImage(storageKey) {
     // Download image from Supabase storage
@@ -387,98 +285,9 @@ Be specific about what you can see in the visual content of each screenshot.
 `;
   }
 
-  async storeGroupAnalysisResults(imageData, analysisText) {
-    try {
-      // Parse the analysis to extract individual screenshot insights
-      const { createClient } = require('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
 
-      // For now, create a simple analysis entry for each screenshot
-      // In the future, we could parse the AI response to extract individual insights
-      const groupId = `group_${Date.now()}`;
-
-      for (const item of imageData) {
-        try {
-          const analysisData = {
-            screenshot_id: item.screenshot.id,
-            user_id: item.screenshot.user_id,
-            activity_detected: this.extractActivityFromGroupAnalysis(analysisText, item.activeApp),
-            productivity_score: this.extractProductivityScore(analysisText),
-            group_analysis_id: groupId,
-            group_analysis_text: analysisText.substring(0, 1000), // Store truncated version
-            analyzed_with_group: true,
-            created_at: new Date().toISOString()
-          };
-
-          const { error } = await supabase
-            .from('screenshot_analysis')
-            .insert(analysisData);
-
-          if (error) {
-            logger.warn(`Failed to store analysis for screenshot ${item.screenshot.id}`, { error: error.message });
-          }
-        } catch (storeError) {
-          logger.warn(`Error storing individual analysis for screenshot ${item.screenshot.id}`, { error: storeError.message });
-        }
-      }
-
-      logger.info('Group analysis results stored successfully', {
-        groupId,
-        screenshotCount: imageData.length
-      });
-
-    } catch (error) {
-      logger.error('Failed to store group analysis results', { error: error.message });
-    }
-  }
-
-  extractActivityFromGroupAnalysis(analysisText, defaultApp) {
-    // Simple extraction - look for common work activities in the analysis
-    const text = analysisText.toLowerCase();
-
-    if (text.includes('coding') || text.includes('programming') || text.includes('development')) {
-      return 'coding';
-    } else if (text.includes('design') || text.includes('creative')) {
-      return 'design';
-    } else if (text.includes('research') || text.includes('browsing') || text.includes('learning')) {
-      return 'research';
-    } else if (text.includes('writing') || text.includes('documentation') || text.includes('notes')) {
-      return 'writing';
-    } else if (text.includes('communication') || text.includes('email') || text.includes('chat')) {
-      return 'communication';
-    } else if (text.includes('meeting') || text.includes('video call')) {
-      return 'meeting';
-    } else {
-      return 'general_work';
-    }
-  }
-
-  extractProductivityScore(analysisText) {
-    // Look for productivity scores in the analysis text
-    const scoreMatch = analysisText.match(/productivity.*?(\d+)/i) ||
-                      analysisText.match(/score.*?(\d+)/i) ||
-                      analysisText.match(/(\d+)%/);
-
-    if (scoreMatch && scoreMatch[1]) {
-      const score = parseInt(scoreMatch[1]);
-      return Math.min(Math.max(score, 0), 100); // Ensure 0-100 range
-    }
-
-    // Default productivity score based on analysis sentiment
-    const text = analysisText.toLowerCase();
-    if (text.includes('highly productive') || text.includes('excellent')) {
-      return 85;
-    } else if (text.includes('productive') || text.includes('focused')) {
-      return 75;
-    } else if (text.includes('moderately') || text.includes('some progress')) {
-      return 65;
-    } else {
-      return 50; // Default moderate score
-    }
-  }
+  // Individual screenshot analysis removed to save tokens
+  // Now only using batch/group analysis for efficiency
 
   buildAggregateAnalysisPrompt(individualAnalyses, screenshots) {
     const sessionDuration = screenshots.length > 1

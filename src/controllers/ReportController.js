@@ -229,6 +229,63 @@ class ReportController {
       message: 'Date range report generated successfully'
     });
   });
+
+  // Get report by ID
+  getReportById = asyncHandler(async (req, res) => {
+    const { userId } = req.user;
+    const { reportId } = req.params;
+
+    logger.info('Fetching report by ID', { userId, reportId });
+
+    validateRequired({ reportId }, ['reportId']);
+
+    const report = await this.reportService.getReportById(userId, reportId);
+
+    res.json({
+      success: true,
+      data: report,
+      message: 'Report retrieved successfully'
+    });
+  });
+
+  // Download report
+  downloadReport = asyncHandler(async (req, res) => {
+    const { userId } = req.user;
+    const { reportId } = req.params;
+
+    logger.info('Downloading report', { userId, reportId });
+
+    validateRequired({ reportId }, ['reportId']);
+
+    const report = await this.reportService.getReportById(userId, reportId);
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: 'Report not found'
+      });
+    }
+
+    // For now, return JSON. In future, could generate PDF
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="report_${reportId}_${Date.now()}.json"`);
+
+    res.json({
+      success: true,
+      report: {
+        id: report.id,
+        title: report.title,
+        session_id: report.session_id,
+        created_at: report.created_at,
+        comprehensive_report: report.comprehensive_report,
+        executive_summary: report.executive_summary,
+        productivity_score: report.productivity_score,
+        focus_score: report.focus_score,
+        session_duration_minutes: report.session_duration_minutes,
+        screenshot_count: report.screenshot_count
+      }
+    });
+  });
 }
 
 module.exports = ReportController;
