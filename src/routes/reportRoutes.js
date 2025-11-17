@@ -29,5 +29,8 @@ router.get('/goal-progress/:goalId', reportController.generateGoalProgressReport
 // Team performance comparison
 router.post('/team-comparison', reportController.generateTeamComparisonReport);
 
+// Session reports endpoints
+router.get('/user', reportController.getUserSessionReports);
+router.get('/session/:sessionId', reportController.getSessionReport);
 
 module.exports = router;

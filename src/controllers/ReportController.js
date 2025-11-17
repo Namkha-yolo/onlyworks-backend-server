@@ -1,10 +1,12 @@
 const ReportService = require('../services/ReportService');
+const ReportsRepository = require('../repositories/ReportsRepository');
 const { asyncHandler, validateRequired } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
 
 class ReportController {
   constructor() {
     this.reportService = new ReportService();
+    this.reportsRepo = new ReportsRepository();
   }
 
   // Generate individual user report
@@ -151,6 +153,48 @@ class ReportController {
     });
   });
 
+  // Get user's session reports
+  getUserSessionReports = asyncHandler(async (req, res) => {
+    const { userId } = req.user;
+    const { limit = 50, startDate, endDate } = req.query;
+
+    logger.info('Getting user session reports', { userId, limit });
+
+    const reports = await this.reportsRepo.getUserReports(userId, {
+      limit: parseInt(limit),
+      startDate,
+      endDate
+    });
+
+    res.json({
+      success: true,
+      data: reports,
+      message: 'User session reports retrieved successfully'
+    });
+  });
+
+  // Get specific session report
+  getSessionReport = asyncHandler(async (req, res) => {
+    const { sessionId } = req.params;
+    const { userId } = req.user;
+
+    logger.info('Getting session report', { sessionId, userId });
+
+    const report = await this.reportsRepo.getBySessionId(sessionId, userId);
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Session report not found' }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: report,
+      message: 'Session report retrieved successfully'
+    });
+  });
 }
 
 module.exports = ReportController;

@@ -1,6 +1,7 @@
 const WorkSessionRepository = require('../repositories/WorkSessionRepository');
 const ScreenshotRepository = require('../repositories/ScreenshotRepository');
 const BatchReportRepository = require('../repositories/BatchReportRepository');
+const ReportsRepository = require('../repositories/ReportsRepository');
 const { ApiError } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -10,6 +11,7 @@ class BatchProcessingService {
     this.workSessionRepo = new WorkSessionRepository();
     this.screenshotRepo = new ScreenshotRepository();
     this.batchReportRepo = new BatchReportRepository();
+    this.reportsRepo = new ReportsRepository();
 
     // Initialize Gemini AI
     this.genAI = null;
@@ -834,6 +836,34 @@ Analyze the screenshots and return the JSON response.`;
         batchCount: batchReports.length,
         totalScreenshots: aggregatedData.totalScreenshots
       });
+
+      // Store comprehensive report in reports table
+      try {
+        const reportData = {
+          title: `${session?.session_name || 'Work Session'} - ${new Date(session?.started_at || new Date()).toLocaleDateString()}`,
+          comprehensiveReport: summary,
+          executiveSummary: summary.summary,
+          productivityScore: aggregatedData.averageProductivity,
+          focusScore: aggregatedData.focusPercentage / 100,
+          sessionDurationMinutes: session?.duration_seconds ? Math.round(session.duration_seconds / 60) : null,
+          screenshotCount: aggregatedData.totalScreenshots
+        };
+
+        await this.reportsRepo.createSessionReport(userId, sessionId, reportData);
+
+        logger.info('Comprehensive report stored successfully', {
+          userId,
+          sessionId,
+          reportTitle: reportData.title
+        });
+      } catch (reportError) {
+        // Don't fail the request if report storage fails
+        logger.warn('Failed to store comprehensive report', {
+          error: reportError.message,
+          userId,
+          sessionId
+        });
+      }
 
       return summary;
 
