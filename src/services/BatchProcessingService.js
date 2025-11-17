@@ -842,8 +842,8 @@ Analyze the screenshots and return the JSON response.`;
         const reportData = {
           title: `${session?.session_name || 'Work Session'} - ${new Date(session?.started_at || new Date()).toLocaleDateString()}`,
           comprehensiveReport: summary,
-          executiveSummary: summary.summary,
-          productivityScore: aggregatedData.averageProductivity,
+          executiveSummary: summary.overview,
+          productivityScore: aggregatedData.averageProductivity / 100,
           focusScore: aggregatedData.focusPercentage / 100,
           sessionDurationMinutes: session?.duration_seconds ? Math.round(session.duration_seconds / 60) : null,
           screenshotCount: aggregatedData.totalScreenshots
