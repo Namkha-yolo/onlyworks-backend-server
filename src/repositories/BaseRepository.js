@@ -12,8 +12,8 @@ class BaseRepository {
     try {
       const startTime = Date.now();
 
-      // Use admin client for users, screenshot_sessions, screenshots, analysis_reports, and screenshot_analysis tables to bypass RLS policies
-      const client = (this.tableName === 'users' || this.tableName === 'screenshot_sessions' || this.tableName === 'screenshots' || this.tableName === 'analysis_reports' || this.tableName === 'screenshot_analysis') && this.supabaseAdmin
+      // Use admin client for users, screenshot_sessions, screenshots, analysis_reports, screenshot_analysis, and reports tables to bypass RLS policies
+      const client = (this.tableName === 'users' || this.tableName === 'screenshot_sessions' || this.tableName === 'screenshots' || this.tableName === 'analysis_reports' || this.tableName === 'screenshot_analysis' || this.tableName === 'reports') && this.supabaseAdmin
         ? this.supabaseAdmin
         : this.supabase;
 
@@ -115,8 +115,8 @@ class BaseRepository {
     try {
       const startTime = Date.now();
 
-      // Use admin client for users, screenshot_sessions, screenshots, analysis_reports, and screenshot_analysis tables to bypass RLS policies
-      const client = (this.tableName === 'users' || this.tableName === 'screenshot_sessions' || this.tableName === 'screenshots' || this.tableName === 'analysis_reports' || this.tableName === 'screenshot_analysis') && this.supabaseAdmin
+      // Use admin client for users, screenshot_sessions, screenshots, analysis_reports, screenshot_analysis, and reports tables to bypass RLS policies
+      const client = (this.tableName === 'users' || this.tableName === 'screenshot_sessions' || this.tableName === 'screenshots' || this.tableName === 'analysis_reports' || this.tableName === 'screenshot_analysis' || this.tableName === 'reports') && this.supabaseAdmin
         ? this.supabaseAdmin
         : this.supabase;
 
