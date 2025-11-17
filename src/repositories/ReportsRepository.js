@@ -38,7 +38,7 @@ class ReportsRepository extends BaseRepository {
       });
 
       // Use upsert to handle potential duplicates (one report per session)
-      const { data, error } = await this.supabase
+      const { data, error } = await this.supabaseAdmin
         .from(this.tableName)
         .upsert(reportInsertData, { onConflict: 'session_id' })
         .select()
