@@ -33,4 +33,7 @@ router.post('/team-comparison', reportController.generateTeamComparisonReport);
 router.get('/user', reportController.getUserSessionReports);
 router.get('/session/:sessionId', reportController.getSessionReport);
 
+// Date range report generation
+router.post('/generate-range', reportController.generateDateRangeReport);
+
 module.exports = router;

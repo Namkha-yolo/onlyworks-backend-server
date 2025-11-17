@@ -195,6 +195,40 @@ class ReportController {
       message: 'Session report retrieved successfully'
     });
   });
+
+  // Generate date range report
+  generateDateRangeReport = asyncHandler(async (req, res) => {
+    const { userId } = req.user;
+    const { startDate, endDate } = req.body;
+
+    logger.info('Generating date range report', { userId, startDate, endDate });
+
+    validateRequired({ startDate, endDate }, ['startDate', 'endDate']);
+
+    // Find all sessions within the date range
+    const sessions = await this.reportService.getSessionsInDateRange(userId, startDate, endDate);
+
+    if (sessions.length === 0) {
+      return res.json({
+        success: true,
+        data: null,
+        message: 'No sessions found in the specified date range'
+      });
+    }
+
+    // Generate comprehensive report for all sessions in the range
+    const report = await this.reportService.generateDateRangeReport(userId, {
+      startDate,
+      endDate,
+      sessions
+    });
+
+    res.json({
+      success: true,
+      data: report,
+      message: 'Date range report generated successfully'
+    });
+  });
 }
 
 module.exports = ReportController;

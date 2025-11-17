@@ -684,6 +684,190 @@ class ReportService {
     }
     return recommendations.length > 0 ? recommendations : ['Consider setting more challenging goals'];
   }
+
+  // Get sessions within a date range
+  async getSessionsInDateRange(userId, startDate, endDate) {
+    try {
+      logger.info('Fetching sessions in date range', { userId, startDate, endDate });
+
+      const sessions = await this.workSessionRepo.getUserSessions(userId, {
+        startDate,
+        endDate,
+        limit: 100 // Increase limit for date range queries
+      });
+
+      return sessions;
+    } catch (error) {
+      logger.error('Failed to fetch sessions in date range', { error: error.message, userId, startDate, endDate });
+      throw new ApiError('INTERNAL_ERROR', { operation: 'fetch_sessions_date_range' });
+    }
+  }
+
+  // Generate comprehensive report for a date range
+  async generateDateRangeReport(userId, options = {}) {
+    try {
+      const { startDate, endDate, sessions } = options;
+
+      logger.info('Generating date range report', {
+        userId,
+        startDate,
+        endDate,
+        sessionCount: sessions.length
+      });
+
+      if (sessions.length === 0) {
+        return {
+          startDate,
+          endDate,
+          totalSessions: 0,
+          message: 'No sessions found in this date range'
+        };
+      }
+
+      // Get comprehensive stats for the date range
+      const [workStats, goals, productivityInsights] = await Promise.all([
+        this.workSessionRepo.getSessionStats(userId, startDate, endDate),
+        this.goalRepo.getUserGoals(userId),
+        this.analysisRepo.getProductivityStats(userId, startDate, endDate)
+      ]);
+
+      // Calculate aggregated metrics
+      const totalDuration = sessions.reduce((sum, session) => sum + (session.duration_seconds || 0), 0);
+      const averageSessionLength = totalDuration / sessions.length;
+
+      const productivityScores = sessions
+        .map(s => s.productivity_score)
+        .filter(score => score !== null && score !== undefined);
+
+      const averageProductivity = productivityScores.length > 0
+        ? productivityScores.reduce((sum, score) => sum + score, 0) / productivityScores.length
+        : 0;
+
+      // Get top applications and websites
+      const appUsage = {};
+      const websiteUsage = {};
+
+      sessions.forEach(session => {
+        // This would require additional data from screenshots/analysis
+        // For now, provide placeholder data
+      });
+
+      const report = {
+        dateRange: {
+          startDate,
+          endDate,
+          daysSpanned: Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24))
+        },
+        summary: {
+          totalSessions: sessions.length,
+          totalDuration: totalDuration,
+          averageSessionLength: Math.round(averageSessionLength),
+          totalScreenshots: sessions.reduce((sum, s) => sum + (s.screenshot_count || 0), 0),
+          averageProductivity: Math.round(averageProductivity * 100) / 100
+        },
+        productivity: {
+          overallScore: averageProductivity,
+          trends: this.calculateProductivityTrends(sessions),
+          insights: productivityInsights?.insights || []
+        },
+        sessions: sessions.map(session => ({
+          id: session.id,
+          name: session.session_name || 'Unnamed Session',
+          date: new Date(session.started_at).toISOString().split('T')[0],
+          duration: session.duration_seconds,
+          productivity: session.productivity_score,
+          goal: session.goal_description || 'No goal set'
+        })),
+        goals: {
+          total: goals.length,
+          completed: goals.filter(g => g.status === 'completed').length,
+          linkedSessions: sessions.filter(s => s.goal_id).length
+        },
+        recommendations: this.generateDateRangeRecommendations(sessions, goals),
+        generatedAt: new Date().toISOString()
+      };
+
+      logger.info('Date range report generated successfully', {
+        userId,
+        startDate,
+        endDate,
+        sessionCount: sessions.length,
+        totalDuration
+      });
+
+      return report;
+    } catch (error) {
+      logger.error('Failed to generate date range report', {
+        error: error.message,
+        userId,
+        options
+      });
+      throw new ApiError('INTERNAL_ERROR', { operation: 'generate_date_range_report' });
+    }
+  }
+
+  // Calculate productivity trends for date range
+  calculateProductivityTrends(sessions) {
+    if (sessions.length < 2) return { trend: 'stable', change: 0 };
+
+    // Sort sessions by date
+    const sortedSessions = sessions
+      .filter(s => s.productivity_score !== null)
+      .sort((a, b) => new Date(a.started_at) - new Date(b.started_at));
+
+    if (sortedSessions.length < 2) return { trend: 'stable', change: 0 };
+
+    const firstHalf = sortedSessions.slice(0, Math.floor(sortedSessions.length / 2));
+    const secondHalf = sortedSessions.slice(Math.floor(sortedSessions.length / 2));
+
+    const firstAvg = firstHalf.reduce((sum, s) => sum + s.productivity_score, 0) / firstHalf.length;
+    const secondAvg = secondHalf.reduce((sum, s) => sum + s.productivity_score, 0) / secondHalf.length;
+
+    const change = ((secondAvg - firstAvg) / firstAvg) * 100;
+
+    return {
+      trend: change > 10 ? 'improving' : change < -10 ? 'declining' : 'stable',
+      change: Math.round(change * 100) / 100
+    };
+  }
+
+  // Generate recommendations for date range
+  generateDateRangeRecommendations(sessions, goals) {
+    const recommendations = [];
+
+    if (sessions.length === 0) {
+      return ['Start recording work sessions to track your productivity'];
+    }
+
+    // Check session frequency
+    const totalDays = (new Date(sessions[sessions.length - 1].started_at) - new Date(sessions[0].started_at)) / (1000 * 60 * 60 * 24);
+    if (sessions.length / totalDays < 0.5) {
+      recommendations.push('Try to maintain more consistent daily work sessions');
+    }
+
+    // Check session duration
+    const avgDuration = sessions.reduce((sum, s) => sum + (s.duration_seconds || 0), 0) / sessions.length;
+    if (avgDuration < 1800) { // Less than 30 minutes
+      recommendations.push('Consider longer focused work sessions (45-90 minutes)');
+    }
+
+    // Check productivity scores
+    const productivityScores = sessions.filter(s => s.productivity_score !== null);
+    if (productivityScores.length > 0) {
+      const avgProductivity = productivityScores.reduce((sum, s) => sum + s.productivity_score, 0) / productivityScores.length;
+      if (avgProductivity < 0.6) {
+        recommendations.push('Focus on eliminating distractions during work sessions');
+      }
+    }
+
+    // Check goal linkage
+    const sessionsWithGoals = sessions.filter(s => s.goal_id).length;
+    if (sessionsWithGoals / sessions.length < 0.5) {
+      recommendations.push('Link more sessions to specific goals for better focus');
+    }
+
+    return recommendations.length > 0 ? recommendations : ['Keep up the good work! Your productivity trends look positive'];
+  }
 }
 
 module.exports = ReportService;
