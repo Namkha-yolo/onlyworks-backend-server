@@ -53,6 +53,9 @@ router.use(authenticateUser);
 // Start a new work session
 router.post('/start', workSessionController.startSession);
 
+// Create session with goals
+router.post('/create-with-goals', workSessionController.createSessionWithGoals);
+
 // Get current active session
 router.get('/active', workSessionController.getActiveSession);
 
@@ -61,6 +64,9 @@ router.get('/', workSessionController.getUserSessions);
 
 // Get specific session by ID (with optional analysis)
 router.get('/:sessionId', workSessionController.getSessionById);
+
+// Get session details with related data (goals, reports, summaries)
+router.get('/:sessionId/details', workSessionController.getSessionDetails);
 
 // Get session core data only (guaranteed non-AI)
 router.get('/:sessionId/core', workSessionController.getSessionCoreData);

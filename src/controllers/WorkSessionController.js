@@ -272,6 +272,52 @@ class WorkSessionController {
 
     res.json(response);
   });
+
+  // Create session with goals
+  createSessionWithGoals = asyncHandler(async (req, res) => {
+    const { userId } = req.user;
+    const { session_name, goals } = req.body;
+
+    logger.info('Creating work session with goals', { userId, session_name, goalCount: goals?.length || 0 });
+
+    validateRequired({ session_name, goals }, ['session_name', 'goals']);
+
+    if (!Array.isArray(goals) || goals.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'At least one goal is required'
+      });
+    }
+
+    const result = await this.workSessionService.createSessionWithGoals(userId, {
+      session_name,
+      goals
+    });
+
+    res.status(201).json({
+      success: true,
+      data: result,
+      message: 'Session with goals created successfully'
+    });
+  });
+
+  // Get session details with related data
+  getSessionDetails = asyncHandler(async (req, res) => {
+    const { userId } = req.user;
+    const { sessionId } = req.params;
+
+    logger.info('Fetching session details', { userId, sessionId });
+
+    validateRequired({ sessionId }, ['sessionId']);
+
+    const sessionDetails = await this.workSessionService.getSessionDetails(userId, sessionId);
+
+    res.json({
+      success: true,
+      data: sessionDetails,
+      message: 'Session details retrieved successfully'
+    });
+  });
 }
 
 module.exports = WorkSessionController;

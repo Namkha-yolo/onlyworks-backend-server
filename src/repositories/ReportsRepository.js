@@ -222,6 +222,38 @@ class ReportsRepository extends BaseRepository {
       throw error;
     }
   }
+
+  async getSessionReports(sessionId) {
+    try {
+      const { logger } = require('../utils/logger');
+      logger.info(`Getting reports for session ${sessionId}`);
+
+      const { data, error } = await this.supabase
+        .from(this.tableName)
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        logger.error(`Error getting session reports`, {
+          error: error.message,
+          code: error.code,
+          sessionId
+        });
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      const { logger } = require('../utils/logger');
+      logger.error('Failed to get session reports', {
+        error: error.message,
+        sessionId,
+        tableName: this.tableName
+      });
+      throw error;
+    }
+  }
 }
 
 module.exports = ReportsRepository;

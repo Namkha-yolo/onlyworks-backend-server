@@ -439,6 +439,136 @@ class WorkSessionService {
       throw new ApiError('INTERNAL_ERROR', { operation: 'get_session_analysis' });
     }
   }
+
+  async createSessionWithGoals(userId, sessionData) {
+    try {
+      logger.info('Creating work session with goals', { userId, sessionData });
+
+      // Validate user exists
+      await this.userService.findById(userId);
+
+      // Check if user already has an active session
+      const activeSession = await this.workSessionRepository.findActiveSession(userId);
+      if (activeSession) {
+        logger.warn('User already has active session', { userId, activeSessionId: activeSession.id });
+        throw new ApiError('RESOURCE_CONFLICT', {
+          operation: 'create_session_with_goals',
+          details: 'User already has an active session. End the current session before starting a new one.',
+          activeSessionId: activeSession.id
+        });
+      }
+
+      // Create the session
+      const session = await this.workSessionRepository.startSession(userId, {
+        session_name: sessionData.session_name,
+        goal_description: sessionData.goals.join('; '), // Store goals as semicolon-separated string for now
+        status: 'active'
+      });
+
+      // Create individual session goals in session_goals table
+      if (sessionData.goals && sessionData.goals.length > 0) {
+        const SessionGoalRepository = require('../repositories/SessionGoalRepository');
+        const sessionGoalRepo = new SessionGoalRepository();
+
+        for (let i = 0; i < sessionData.goals.length; i++) {
+          const goalText = sessionData.goals[i];
+          await sessionGoalRepo.create({
+            user_id: userId,
+            session_id: session.id,
+            goal_text: goalText,
+            status: 'pending',
+            priority: 'medium',
+            order_index: i + 1
+          });
+        }
+      }
+
+      logger.info('Session with goals created successfully', { userId, sessionId: session.id, goalCount: sessionData.goals.length });
+
+      return session;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      logger.error('Error creating session with goals', { error: error.message, userId, sessionData });
+      throw new ApiError('INTERNAL_ERROR', { operation: 'create_session_with_goals' });
+    }
+  }
+
+  async getSessionDetails(userId, sessionId) {
+    try {
+      logger.info('Fetching session details', { userId, sessionId });
+
+      // Get the base session
+      const session = await this.workSessionRepository.findByIdAndUser(sessionId, userId);
+      if (!session) {
+        throw new ApiError('RESOURCE_NOT_FOUND', { resource: 'work_session', sessionId });
+      }
+
+      // Get session goals
+      let goals = [];
+      try {
+        const SessionGoalRepository = require('../repositories/SessionGoalRepository');
+        const sessionGoalRepo = new SessionGoalRepository();
+        goals = await sessionGoalRepo.getSessionGoals(sessionId);
+      } catch (error) {
+        logger.warn('Could not fetch session goals', { sessionId, error: error.message });
+      }
+
+      // Get session reports
+      let reports = [];
+      try {
+        const ReportsRepository = require('../repositories/ReportsRepository');
+        const reportsRepo = new ReportsRepository();
+        const sessionReports = await reportsRepo.getSessionReports(sessionId);
+        reports = sessionReports || [];
+      } catch (error) {
+        logger.warn('Could not fetch session reports', { sessionId, error: error.message });
+      }
+
+      // Get session summaries
+      let summaries = [];
+      try {
+        const { logger: serviceLogger } = require('../utils/logger');
+        const supabase = require('../config/supabase');
+
+        const { data: sessionSummaries, error: summariesError } = await supabase.client
+          .from('session_summaries')
+          .select('*')
+          .eq('session_id', sessionId)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+
+        if (summariesError) {
+          serviceLogger.warn('Error fetching session summaries', { sessionId, error: summariesError.message });
+        } else {
+          summaries = sessionSummaries || [];
+        }
+      } catch (error) {
+        logger.warn('Could not fetch session summaries', { sessionId, error: error.message });
+      }
+
+      // Combine all the data
+      const sessionDetails = {
+        ...session,
+        goals: goals,
+        reports: reports,
+        summaries: summaries
+      };
+
+      logger.info('Session details retrieved successfully', {
+        userId,
+        sessionId,
+        goalCount: goals.length,
+        reportCount: reports.length,
+        summaryCount: summaries.length
+      });
+
+      return sessionDetails;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      logger.error('Error fetching session details', { error: error.message, userId, sessionId });
+      throw new ApiError('INTERNAL_ERROR', { operation: 'get_session_details' });
+    }
+  }
 }
 
 module.exports = WorkSessionService;
