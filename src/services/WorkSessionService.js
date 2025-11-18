@@ -498,7 +498,7 @@ class WorkSessionService {
       logger.info('Fetching session details', { userId, sessionId });
 
       // Get the base session
-      const session = await this.workSessionRepository.findByIdAndUser(sessionId, userId);
+      const session = await this.workSessionRepository.getSessionById(sessionId, userId);
       if (!session) {
         throw new ApiError('RESOURCE_NOT_FOUND', { resource: 'work_session', sessionId });
       }
