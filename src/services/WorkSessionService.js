@@ -528,19 +528,22 @@ class WorkSessionService {
       let summaries = [];
       try {
         const { logger: serviceLogger } = require('../utils/logger');
-        const supabase = require('../config/supabase');
+        const { getSupabaseAdminClient } = require('../config/database');
+        const supabaseAdmin = getSupabaseAdminClient();
 
-        const { data: sessionSummaries, error: summariesError } = await supabase.client
-          .from('session_summaries')
-          .select('*')
-          .eq('session_id', sessionId)
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false });
+        if (supabaseAdmin) {
+          const { data: sessionSummaries, error: summariesError } = await supabaseAdmin
+            .from('session_summaries')
+            .select('*')
+            .eq('session_id', sessionId)
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
 
-        if (summariesError) {
-          serviceLogger.warn('Error fetching session summaries', { sessionId, error: summariesError.message });
-        } else {
-          summaries = sessionSummaries || [];
+          if (summariesError) {
+            serviceLogger.warn('Error fetching session summaries', { sessionId, error: summariesError.message });
+          } else {
+            summaries = sessionSummaries || [];
+          }
         }
       } catch (error) {
         logger.warn('Could not fetch session summaries', { sessionId, error: error.message });
