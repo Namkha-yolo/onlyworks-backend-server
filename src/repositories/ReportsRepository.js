@@ -24,19 +24,9 @@ class ReportsRepository extends BaseRepository {
         throw new Error('No Supabase client available');
       }
 
-      // First get the auth_user_id since reports.user_id references auth.users(id)
-      const { data: userData, error: userError } = await client
-        .from('users')
-        .select('auth_user_id')
-        .eq('id', userId)
-        .single();
-
-      if (userError || !userData?.auth_user_id) {
-        logger.error('Failed to get auth_user_id', { userId, error: userError?.message });
-        throw new Error('Cannot create report without auth_user_id');
-      }
-
-      const authUserId = userData.auth_user_id;
+      // Use the user's ID directly as the reports.user_id
+      // The SQL migration script will fix the foreign key constraint
+      const authUserId = userId;
 
       const { data: existingReport, error: existingError } = await client
         .from(this.tableName)
@@ -135,20 +125,8 @@ class ReportsRepository extends BaseRepository {
         throw new Error('No Supabase client available');
       }
 
-      // Get the auth_user_id since reports.user_id references auth.users(id)
-      const { data: userData, error: userError } = await client
-        .from('users')
-        .select('auth_user_id')
-        .eq('id', userId)
-        .single();
-
-      if (userError || !userData?.auth_user_id) {
-        const { logger } = require('../utils/logger');
-        logger.error('Failed to get auth_user_id for getBySessionId', { userId, error: userError?.message });
-        return null;
-      }
-
-      const authUserId = userData.auth_user_id;
+      // Use userId directly
+      const authUserId = userId;
 
       const { data, error } = await client
         .from(this.tableName)
@@ -187,20 +165,8 @@ class ReportsRepository extends BaseRepository {
         throw new Error('No Supabase client available');
       }
 
-      // Get the auth_user_id since reports.user_id references auth.users(id)
-      const { data: userData, error: userError } = await client
-        .from('users')
-        .select('auth_user_id')
-        .eq('id', userId)
-        .single();
-
-      if (userError || !userData?.auth_user_id) {
-        const { logger } = require('../utils/logger');
-        logger.error('Failed to get auth_user_id for getUserReports', { userId, error: userError?.message });
-        return []; // Return empty array if user not found
-      }
-
-      const authUserId = userData.auth_user_id;
+      // Use userId directly
+      const authUserId = userId;
 
       let query = client
         .from(this.tableName)
@@ -264,20 +230,8 @@ class ReportsRepository extends BaseRepository {
         throw new Error('No Supabase client available');
       }
 
-      // Get the auth_user_id since reports.user_id references auth.users(id)
-      const { data: userData, error: userError } = await client
-        .from('users')
-        .select('auth_user_id')
-        .eq('id', userId)
-        .single();
-
-      if (userError || !userData?.auth_user_id) {
-        const { logger } = require('../utils/logger');
-        logger.error('Failed to get auth_user_id for getFullReport', { userId, error: userError?.message });
-        return null;
-      }
-
-      const authUserId = userData.auth_user_id;
+      // Use userId directly
+      const authUserId = userId;
 
       const { data, error } = await client
         .from(this.tableName)
@@ -317,20 +271,8 @@ class ReportsRepository extends BaseRepository {
         throw new Error('No Supabase client available');
       }
 
-      // Get the auth_user_id since reports.user_id references auth.users(id)
-      const { data: userData, error: userError } = await client
-        .from('users')
-        .select('auth_user_id')
-        .eq('id', userId)
-        .single();
-
-      if (userError || !userData?.auth_user_id) {
-        const { logger } = require('../utils/logger');
-        logger.error('Failed to get auth_user_id for updateReport', { userId, error: userError?.message });
-        throw new Error('Cannot update report without auth_user_id');
-      }
-
-      const authUserId = userData.auth_user_id;
+      // Use userId directly
+      const authUserId = userId;
 
       const { data, error } = await client
         .from(this.tableName)

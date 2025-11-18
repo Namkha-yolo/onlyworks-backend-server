@@ -25,18 +25,12 @@ class UserRepository extends BaseRepository {
 
   async createUser(userData) {
     try {
-      const { v4: uuidv4 } = require('uuid');
       const defaultOrganizationId = process.env.DEFAULT_ORGANIZATION_ID || '00000000-0000-0000-0000-000000000001';
 
       // Use admin client directly to bypass RLS policies for user creation
       const client = this.supabaseAdmin || this.supabase;
 
-      // Generate a UUID for the user
-      const userId = uuidv4();
-
       const userRecord = {
-        id: userId,
-        auth_user_id: userId, // Set auth_user_id to the same as id for OAuth users
         email: userData.email,
         full_name: userData.name || userData.display_name, // Use 'full_name' to match schema
         picture_url: userData.avatar_url, // Use 'picture_url' to match schema
