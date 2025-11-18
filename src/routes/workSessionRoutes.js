@@ -1,6 +1,9 @@
 const express = require('express');
 const WorkSessionController = require('../controllers/WorkSessionController');
 const { authenticateUser } = require('../middleware/auth');
+const redis = require('../config/redis');
+const { getSupabaseClient } = require('../config/database');
+const { logger } = require('../utils/logger');
 
 const router = express.Router();
 const workSessionController = new WorkSessionController();
@@ -88,6 +91,100 @@ router.put('/:sessionId/resume', workSessionController.resumeSession);
 
 // Update session scores
 router.put('/:sessionId/scores', workSessionController.updateSessionScores);
+
+// Queue session for GPU worker processing
+router.post('/:sessionId/queue', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { userId } = req.user;
+    const supabase = getSupabaseClient();
+
+    logger.info('Queueing session for GPU processing', { sessionId, userId });
+
+    // Validate session exists and belongs to user
+    const { data: session, error: sessionError } = await supabase
+      .from('screenshot_sessions')
+      .select('id, user_id, status')
+      .eq('id', sessionId)
+      .eq('user_id', userId)
+      .single();
+
+    if (sessionError || !session) {
+      logger.warn('Session not found for queuing', { sessionId, userId, error: sessionError?.message });
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+
+    // Get all screenshots for this session
+    const { data: screenshots, error: screenshotsError } = await supabase
+      .from('screenshots')
+      .select('id')
+      .eq('session_id', sessionId)
+      .eq('user_id', userId);
+
+    if (screenshotsError) {
+      logger.error('Failed to fetch screenshots', { sessionId, userId, error: screenshotsError.message });
+      throw screenshotsError;
+    }
+
+    if (!screenshots || screenshots.length === 0) {
+      logger.warn('No screenshots found in session', { sessionId, userId });
+      return res.status(400).json({
+        success: false,
+        error: 'No screenshots found in session'
+      });
+    }
+
+    // Check if Redis is available
+    if (!redis) {
+      logger.error('Redis not configured', { sessionId, userId });
+      return res.status(503).json({
+        success: false,
+        error: 'Queue service not available - Redis not configured'
+      });
+    }
+
+    // Create task for GPU worker
+    const task = {
+      session_id: sessionId,
+      user_id: userId,
+      screenshot_ids: screenshots.map(s => s.id),
+      timestamp: new Date().toISOString()
+    };
+
+    // Push to Redis queue - GPU worker will BRPOP from 'session_queue'
+    await redis.lpush('session_queue', JSON.stringify(task));
+
+    logger.info('Session queued successfully', {
+      sessionId,
+      userId,
+      screenshotCount: screenshots.length
+    });
+
+    return res.json({
+      success: true,
+      session_id: sessionId,
+      screenshot_count: screenshots.length,
+      queued_at: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Error queuing session', {
+      sessionId: req.params.sessionId,
+      userId: req.user?.userId,
+      error: error.message,
+      stack: error.stack
+    });
+
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to queue session',
+      message: error.message
+    });
+  }
+});
 
 // Get session statistics
 router.get('/stats/summary', workSessionController.getSessionStats);
