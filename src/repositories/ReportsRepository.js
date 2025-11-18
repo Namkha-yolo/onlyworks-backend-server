@@ -24,21 +24,36 @@ class ReportsRepository extends BaseRepository {
         throw new Error('No Supabase client available');
       }
 
-      const existingReport = await client
+      // First get the auth_user_id since reports.user_id references auth.users(id)
+      const { data: userData, error: userError } = await client
+        .from('users')
+        .select('auth_user_id')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !userData?.auth_user_id) {
+        logger.error('Failed to get auth_user_id', { userId, error: userError?.message });
+        throw new Error('Cannot create report without auth_user_id');
+      }
+
+      const authUserId = userData.auth_user_id;
+
+      const { data: existingReport, error: existingError } = await client
         .from(this.tableName)
         .select('id')
         .eq('session_id', sessionId)
-        .eq('user_id', userId)
+        .eq('user_id', authUserId)
         .single();
 
-      if (existingReport.data) {
+      // Check if a report exists (ignoring "no rows" error)
+      if (existingReport && !existingError) {
         logger.info('Report already exists for session, updating existing report', {
           userId,
           sessionId,
-          existingReportId: existingReport.data.id
+          existingReportId: existingReport.id
         });
         // Update existing report
-        return await this.update(existingReport.data.id, {
+        return await this.update(existingReport.id, {
           title: reportData.title || `Session Report - ${new Date().toLocaleDateString()}`,
           comprehensive_report: reportData.comprehensiveReport || reportData,
           executive_summary: reportData.executiveSummary || reportData.summary || '',
@@ -52,7 +67,7 @@ class ReportsRepository extends BaseRepository {
       // Prepare report data with required structure
       const reportInsertData = {
         id: uuidv4(), // Generate unique ID
-        user_id: userId,
+        user_id: authUserId, // Use auth_user_id that we already fetched
         session_id: sessionId,
         report_date: new Date().toISOString().split('T')[0], // Current date
         title: reportData.title || `Session Report - ${new Date().toLocaleDateString()}`,
@@ -157,6 +172,21 @@ class ReportsRepository extends BaseRepository {
         throw new Error('No Supabase client available');
       }
 
+      // Get the auth_user_id since reports.user_id references auth.users(id)
+      const { data: userData, error: userError } = await client
+        .from('users')
+        .select('auth_user_id')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !userData?.auth_user_id) {
+        const { logger } = require('../utils/logger');
+        logger.error('Failed to get auth_user_id for getUserReports', { userId, error: userError?.message });
+        return []; // Return empty array if user not found
+      }
+
+      const authUserId = userData.auth_user_id;
+
       let query = client
         .from(this.tableName)
         .select(`
@@ -172,7 +202,7 @@ class ReportsRepository extends BaseRepository {
           created_at,
           updated_at
         `)
-        .eq('user_id', userId);
+        .eq('user_id', authUserId);
 
       if (options.startDate) {
         query = query.gte('report_date', options.startDate);
