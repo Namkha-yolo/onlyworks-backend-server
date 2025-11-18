@@ -666,11 +666,16 @@ Analyze the screenshots and return the JSON response.`;
           reportTitle: reportData.title
         });
       } catch (reportError) {
-        // Don't fail the request if report storage fails
-        logger.warn('Failed to store comprehensive report', {
+        // Log the error prominently but don't fail the request
+        logger.error('CRITICAL: Failed to store comprehensive report - reports will be missing from UI', {
           error: reportError.message,
+          stack: reportError.stack,
           userId,
-          sessionId
+          sessionId,
+          reportData: {
+            title: reportData?.title,
+            screenshotCount: reportData?.screenshotCount
+          }
         });
       }
 

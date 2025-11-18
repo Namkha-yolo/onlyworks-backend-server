@@ -10,7 +10,7 @@ class WorkSessionRepository extends BaseRepository {
       const { logger } = require('../utils/logger');
       logger.info(`Finding active session for user ${userId} in table ${this.tableName}`);
 
-      const { data, error } = await this.supabase
+      const { data, error } = await this.supabaseAdmin
         .from(this.tableName)
         .select('*')
         .eq('user_id', userId)
@@ -93,6 +93,9 @@ class WorkSessionRepository extends BaseRepository {
 
       // Use admin client for screenshot_sessions table to bypass RLS policies
       const client = this.supabaseAdmin || this.supabase;
+      if (!client) {
+        throw new Error('No Supabase client available');
+      }
 
       logger.info('Getting session by ID', {
         sessionId,
@@ -137,7 +140,9 @@ class WorkSessionRepository extends BaseRepository {
 
   async getUserSessions(userId, options = {}) {
     try {
-      let query = this.supabase
+      // Since screenshot_sessions is in the admin list in BaseRepository,
+      // we can trust that this.supabaseAdmin is properly initialized
+      let query = this.supabaseAdmin
         .from(this.tableName)
         .select('*')
         .eq('user_id', userId);
@@ -170,7 +175,7 @@ class WorkSessionRepository extends BaseRepository {
 
   async getSessionStats(userId, dateFrom, dateTo) {
     try {
-      let query = this.supabase
+      let query = this.supabaseAdmin
         .from(this.tableName)
         .select('duration_seconds, productivity_score, focus_score, status')
         .eq('user_id', userId);
@@ -216,7 +221,7 @@ class WorkSessionRepository extends BaseRepository {
         updated_at: new Date().toISOString()
       };
 
-      const { data, error } = await this.supabase
+      const { data, error } = await this.supabaseAdmin
         .from(this.tableName)
         .update(updateData)
         .eq('id', sessionId)

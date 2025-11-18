@@ -158,7 +158,7 @@ class WorkSessionService {
 
   async getUserSessions(userId, options = {}) {
     try {
-      const sessions = await this.workSessionRepository.findUserSessions(userId, options);
+      const sessions = await this.workSessionRepository.getUserSessions(userId, options);
       return sessions;
     } catch (error) {
       logger.error('Error getting user sessions', { error: error.message, userId, options });

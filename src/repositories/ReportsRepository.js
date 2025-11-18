@@ -1,4 +1,5 @@
 const BaseRepository = require('./BaseRepository');
+const { v4: uuidv4 } = require('uuid');
 
 class ReportsRepository extends BaseRepository {
   constructor() {
@@ -16,8 +17,41 @@ class ReportsRepository extends BaseRepository {
     try {
       const { logger } = require('../utils/logger');
 
+      // Check if a report already exists for this session
+      // Use admin client if available, otherwise fallback to regular client
+      const client = this.supabaseAdmin || this.supabase;
+      if (!client) {
+        throw new Error('No Supabase client available');
+      }
+
+      const existingReport = await client
+        .from(this.tableName)
+        .select('id')
+        .eq('session_id', sessionId)
+        .eq('user_id', userId)
+        .single();
+
+      if (existingReport.data) {
+        logger.info('Report already exists for session, updating existing report', {
+          userId,
+          sessionId,
+          existingReportId: existingReport.data.id
+        });
+        // Update existing report
+        return await this.update(existingReport.data.id, {
+          title: reportData.title || `Session Report - ${new Date().toLocaleDateString()}`,
+          comprehensive_report: reportData.comprehensiveReport || reportData,
+          executive_summary: reportData.executiveSummary || reportData.summary || '',
+          productivity_score: reportData.productivityScore || reportData.averageProductivity || null,
+          focus_score: reportData.focusScore || reportData.focusPercentage ? (reportData.focusPercentage / 100) : null,
+          session_duration_minutes: reportData.sessionDurationMinutes || reportData.durationMinutes || null,
+          screenshot_count: reportData.screenshotCount || reportData.totalScreenshots || 0
+        }, userId);
+      }
+
       // Prepare report data with required structure
       const reportInsertData = {
+        id: uuidv4(), // Generate unique ID
         user_id: userId,
         session_id: sessionId,
         report_date: new Date().toISOString().split('T')[0], // Current date
@@ -37,10 +71,10 @@ class ReportsRepository extends BaseRepository {
         screenshotCount: reportInsertData.screenshot_count
       });
 
-      // Use upsert to handle potential duplicates (one report per session)
-      const { data, error } = await this.supabaseAdmin
+      // Insert new report
+      const { data, error } = await client
         .from(this.tableName)
-        .upsert(reportInsertData, { onConflict: 'session_id' })
+        .insert(reportInsertData)
         .select()
         .single();
 
@@ -80,7 +114,13 @@ class ReportsRepository extends BaseRepository {
    */
   async getBySessionId(sessionId, userId) {
     try {
-      const { data, error } = await this.supabase
+      // Use admin client if available, otherwise fallback to regular client
+      const client = this.supabaseAdmin || this.supabase;
+      if (!client) {
+        throw new Error('No Supabase client available');
+      }
+
+      const { data, error } = await client
         .from(this.tableName)
         .select('*')
         .eq('session_id', sessionId)
@@ -111,7 +151,13 @@ class ReportsRepository extends BaseRepository {
    */
   async getUserReports(userId, options = {}) {
     try {
-      let query = this.supabase
+      // Use admin client if available, otherwise fallback to regular client
+      const client = this.supabaseAdmin || this.supabase;
+      if (!client) {
+        throw new Error('No Supabase client available');
+      }
+
+      let query = client
         .from(this.tableName)
         .select(`
           id,
