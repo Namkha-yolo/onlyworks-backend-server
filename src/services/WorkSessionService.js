@@ -27,10 +27,22 @@ class WorkSessionService {
       const activeSession = await this.workSessionRepository.findActiveSession(userId);
       if (activeSession) {
         logger.warn('User already has active session', { userId, activeSessionId: activeSession.id });
-        throw new ApiError('RESOURCE_CONFLICT', {
-          message: 'User already has an active work session',
-          active_session_id: activeSession.id
-        });
+
+        // If force flag is set, end the existing session
+        if (sessionData.force || sessionData.endPrevious) {
+          logger.info('Force flag set, ending existing session', { userId, activeSessionId: activeSession.id });
+          try {
+            await this.endSession(activeSession.id, userId);
+            logger.info('Successfully ended previous session', { userId, activeSessionId: activeSession.id });
+          } catch (error) {
+            logger.warn('Could not end previous session', { error: error.message, userId, activeSessionId: activeSession.id });
+          }
+        } else {
+          throw new ApiError('RESOURCE_CONFLICT', {
+            message: 'User already has an active work session',
+            active_session_id: activeSession.id
+          });
+        }
       }
       logger.info('No active session found, proceeding with creation', { userId });
 
