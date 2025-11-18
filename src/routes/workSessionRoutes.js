@@ -62,6 +62,9 @@ router.post('/create-with-goals', workSessionController.createSessionWithGoals);
 // Get current active session
 router.get('/active', workSessionController.getActiveSession);
 
+// Force end all active sessions (cleanup utility)
+router.post('/force-end-all', workSessionController.forceEndAllSessions);
+
 // Get user's work sessions with pagination and filters
 router.get('/', workSessionController.getUserSessions);
 

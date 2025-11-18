@@ -97,6 +97,32 @@ class WorkSessionController {
     });
   });
 
+  // Force end all active sessions for a user (cleanup utility)
+  forceEndAllSessions = asyncHandler(async (req, res) => {
+    const { userId } = req.user;
+
+    logger.info('Force ending all active sessions', { userId });
+
+    try {
+      const endedSessions = await this.workSessionService.forceEndAllActiveSessions(userId);
+
+      res.json({
+        success: true,
+        data: {
+          endedSessionsCount: endedSessions.length,
+          endedSessions: endedSessions
+        },
+        message: `Successfully ended ${endedSessions.length} active session(s)`
+      });
+    } catch (error) {
+      logger.error('Failed to force end sessions', { error: error.message, userId });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to end active sessions'
+      });
+    }
+  });
+
   // Get specific session by ID with optional analysis
   getSessionById = asyncHandler(async (req, res) => {
     const { sessionId } = req.params;

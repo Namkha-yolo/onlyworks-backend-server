@@ -168,6 +168,36 @@ class WorkSessionService {
     }
   }
 
+  async forceEndAllActiveSessions(userId) {
+    try {
+      logger.info('Force ending all active sessions for user', { userId });
+
+      // Get all active sessions for the user
+      const activeSessions = await this.workSessionRepository.getUserSessions(userId, {
+        filters: { status: ['active', 'paused'] }
+      });
+
+      const endedSessions = [];
+
+      // End each active session
+      for (const session of activeSessions) {
+        try {
+          const endedSession = await this.endSession(session.id, userId);
+          endedSessions.push(endedSession);
+          logger.info('Force ended session', { userId, sessionId: session.id });
+        } catch (error) {
+          logger.warn('Could not end session', { userId, sessionId: session.id, error: error.message });
+        }
+      }
+
+      logger.info('Force ended all active sessions', { userId, endedCount: endedSessions.length });
+      return endedSessions;
+    } catch (error) {
+      logger.error('Error force ending all sessions', { error: error.message, userId });
+      throw new ApiError('INTERNAL_ERROR', { operation: 'force_end_all_sessions' });
+    }
+  }
+
   async getUserSessions(userId, options = {}) {
     try {
       const sessions = await this.workSessionRepository.getUserSessions(userId, options);

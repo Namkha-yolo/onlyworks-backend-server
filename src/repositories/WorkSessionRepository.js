@@ -159,6 +159,15 @@ class WorkSessionRepository extends BaseRepository {
         query = query.limit(options.limit);
       }
 
+      // Add status filtering
+      if (options.filters && options.filters.status) {
+        if (Array.isArray(options.filters.status)) {
+          query = query.in('status', options.filters.status);
+        } else {
+          query = query.eq('status', options.filters.status);
+        }
+      }
+
       query = query.order('started_at', { ascending: false });
 
       const { data, error } = await query;
