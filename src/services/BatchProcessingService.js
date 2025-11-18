@@ -672,9 +672,9 @@ Analyze the screenshots and return the JSON response.`;
           stack: reportError.stack,
           userId,
           sessionId,
-          reportData: {
-            title: reportData?.title,
-            screenshotCount: reportData?.screenshotCount
+          reportInfo: {
+            sessionName: session?.session_name || 'Work Session',
+            totalScreenshots: aggregatedData.totalScreenshots
           }
         });
       }
