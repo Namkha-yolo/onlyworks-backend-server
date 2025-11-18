@@ -26,6 +26,7 @@ const backtestRoutes = require('./routes/backtestRoutes');
 const batchProcessingRoutes = require('./routes/batchProcessingRoutes');
 const userSessionRoutes = require('./routes/userSessionRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 
@@ -109,6 +110,7 @@ app.use('/api/backtest', backtestRoutes);
 app.use('/api/batch', batchProcessingRoutes);
 app.use('/api/user-session', userSessionRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Backward compatibility endpoint for desktop app
 // Desktop app expects POST /api/analyze
