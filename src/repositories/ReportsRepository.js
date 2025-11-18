@@ -135,11 +135,26 @@ class ReportsRepository extends BaseRepository {
         throw new Error('No Supabase client available');
       }
 
+      // Get the auth_user_id since reports.user_id references auth.users(id)
+      const { data: userData, error: userError } = await client
+        .from('users')
+        .select('auth_user_id')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !userData?.auth_user_id) {
+        const { logger } = require('../utils/logger');
+        logger.error('Failed to get auth_user_id for getBySessionId', { userId, error: userError?.message });
+        return null;
+      }
+
+      const authUserId = userData.auth_user_id;
+
       const { data, error } = await client
         .from(this.tableName)
         .select('*')
         .eq('session_id', sessionId)
-        .eq('user_id', userId)
+        .eq('user_id', authUserId)
         .single();
 
       if (error && error.code !== 'PGRST116') {
@@ -243,11 +258,32 @@ class ReportsRepository extends BaseRepository {
    */
   async getFullReport(reportId, userId) {
     try {
-      const { data, error } = await this.supabase
+      // Use admin client if available, otherwise fallback to regular client
+      const client = this.supabaseAdmin || this.supabase;
+      if (!client) {
+        throw new Error('No Supabase client available');
+      }
+
+      // Get the auth_user_id since reports.user_id references auth.users(id)
+      const { data: userData, error: userError } = await client
+        .from('users')
+        .select('auth_user_id')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !userData?.auth_user_id) {
+        const { logger } = require('../utils/logger');
+        logger.error('Failed to get auth_user_id for getFullReport', { userId, error: userError?.message });
+        return null;
+      }
+
+      const authUserId = userData.auth_user_id;
+
+      const { data, error } = await client
         .from(this.tableName)
         .select('*')
         .eq('id', reportId)
-        .eq('user_id', userId)
+        .eq('user_id', authUserId)
         .single();
 
       if (error && error.code !== 'PGRST116') {
@@ -275,11 +311,32 @@ class ReportsRepository extends BaseRepository {
    */
   async updateReport(reportId, userId, updateData) {
     try {
-      const { data, error } = await this.supabase
+      // Use admin client if available, otherwise fallback to regular client
+      const client = this.supabaseAdmin || this.supabase;
+      if (!client) {
+        throw new Error('No Supabase client available');
+      }
+
+      // Get the auth_user_id since reports.user_id references auth.users(id)
+      const { data: userData, error: userError } = await client
+        .from('users')
+        .select('auth_user_id')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !userData?.auth_user_id) {
+        const { logger } = require('../utils/logger');
+        logger.error('Failed to get auth_user_id for updateReport', { userId, error: userError?.message });
+        throw new Error('Cannot update report without auth_user_id');
+      }
+
+      const authUserId = userData.auth_user_id;
+
+      const { data, error } = await client
         .from(this.tableName)
         .update(updateData)
         .eq('id', reportId)
-        .eq('user_id', userId)
+        .eq('user_id', authUserId)
         .select()
         .single();
 
@@ -304,7 +361,13 @@ class ReportsRepository extends BaseRepository {
       const { logger } = require('../utils/logger');
       logger.info(`Getting reports for session ${sessionId}`);
 
-      const { data, error } = await this.supabase
+      // Use admin client if available, otherwise fallback to regular client
+      const client = this.supabaseAdmin || this.supabase;
+      if (!client) {
+        throw new Error('No Supabase client available');
+      }
+
+      const { data, error } = await client
         .from(this.tableName)
         .select('*')
         .eq('session_id', sessionId)
