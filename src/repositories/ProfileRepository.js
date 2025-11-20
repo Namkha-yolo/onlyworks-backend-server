@@ -74,7 +74,27 @@ class ProfileRepository extends BaseRepository {
     // Always update timestamp
     updateData.updated_at = new Date().toISOString();
 
-    return this.update(userId, updateData);
+    // Use UPSERT to handle cases where profile doesn't exist yet
+    try {
+      const { data, error } = await this.supabase
+        .from(this.tableName)
+        .upsert({
+          id: userId,
+          ...updateData
+        }, {
+          onConflict: 'id'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      throw error;
+    }
   }
 
   async createProfile(userId, profileData) {
