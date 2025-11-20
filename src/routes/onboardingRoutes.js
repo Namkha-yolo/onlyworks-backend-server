@@ -8,6 +8,9 @@ const onboardingController = new OnboardingController();
 // All onboarding routes require authentication
 router.use(authenticateUser);
 
+// Sync onboarding data from desktop app
+router.post('/', onboardingController.syncOnboardingData);
+
 // Get onboarding status and progress
 router.get('/status', onboardingController.getStatus);
 

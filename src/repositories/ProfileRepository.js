@@ -60,7 +60,8 @@ class ProfileRepository extends BaseRepository {
       'profile_complete',
       'onboarding_completed',
       'subscription_type',
-      'subscription_status'
+      'subscription_status',
+      'trial_ends_at'
     ];
 
     const updateData = {};
