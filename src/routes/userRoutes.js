@@ -6,7 +6,10 @@ const { authenticateUser } = require('../middleware/auth');
 const router = express.Router();
 const userController = new UserController();
 
-// Apply authentication to all user routes
+// Public routes (no authentication required)
+router.get('/check-username', userController.checkUsernameAvailability);
+
+// Apply authentication to all other user routes
 router.use(authenticateUser);
 
 // Get current user profile

@@ -17,7 +17,7 @@ class AdminController {
 
       // Get all users where auth_user_id is null
       const { data: users, error: fetchError } = await supabaseAdmin
-        .from('users')
+        .from('web_users')
         .select('id, email, auth_user_id')
         .is('auth_user_id', null);
 
@@ -48,7 +48,7 @@ class AdminController {
         logger.info(`Updating user ${user.id} (${user.email})...`);
 
         const { error: updateError } = await supabaseAdmin
-          .from('users')
+          .from('web_users')
           .update({ auth_user_id: user.id })
           .eq('id', user.id);
 

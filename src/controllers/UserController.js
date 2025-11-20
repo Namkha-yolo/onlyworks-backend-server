@@ -9,6 +9,24 @@ class UserController {
     this.profileService = new ProfileService();
   }
 
+  // Check username availability (public endpoint)
+  checkUsernameAvailability = asyncHandler(async (req, res) => {
+    const { username } = req.query;
+
+    if (!username || username.length < 3) {
+      return res.json({
+        available: false,
+        error: 'Username must be at least 3 characters'
+      });
+    }
+
+    logger.info('Checking username availability', { username });
+
+    const existingProfile = await this.profileService.profileRepository.findByUsername(username);
+
+    res.json({ available: !existingProfile });
+  });
+
   // Get current user profile
   getProfile = asyncHandler(async (req, res) => {
     const { userId } = req.user;

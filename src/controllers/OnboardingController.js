@@ -63,7 +63,7 @@ class OnboardingController {
     // Check username uniqueness if provided
     if (username) {
       const existingUser = await this.userRepository.supabase
-        .from('users')
+        .from('profiles')
         .select('id')
         .eq('username', username)
         .neq('id', userId)
