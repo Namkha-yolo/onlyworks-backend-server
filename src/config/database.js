@@ -77,7 +77,7 @@ async function checkDatabaseConnection() {
   try {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
-      .from('users')
+      .from('web_users')
       .select('count')
       .limit(1);
 

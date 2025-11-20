@@ -5,10 +5,12 @@ const { logger } = require('../utils/logger');
 const { getUserByEmailCompat, createUserCompat } = require('../utils/supabaseCompat');
 const { getSupabaseAdminClient } = require('../config/database');
 const UserRepository = require('../repositories/UserRepository');
+const ProfileRepository = require('../repositories/ProfileRepository');
 
 class AuthService {
   constructor() {
     this.userRepository = new UserRepository();
+    this.profileRepository = new ProfileRepository();
     this.jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
     this.jwtExpiry = process.env.JWT_EXPIRY || '1h';
     this.refreshTokenExpiry = process.env.REFRESH_TOKEN_EXPIRY || '7d';
@@ -398,6 +400,50 @@ class AuthService {
         throw new Error('Failed to create or retrieve user');
       }
 
+      // Sync profile table with web_users data
+      try {
+        let profile = await this.profileRepository.findByUserId(user.id);
+
+        if (profile) {
+          // Update existing profile
+          logger.info('Updating existing profile for user', { userId: user.id });
+          profile = await this.profileRepository.updateProfile(user.id, {
+            email: userInfo.email,
+            full_name: userInfo.name,
+            avatar_url: userInfo.avatar_url
+          });
+        } else {
+          // Create new profile (first login)
+          logger.info('Creating new profile for user', { userId: user.id });
+          profile = await this.profileRepository.createProfile(user.id, {
+            id: user.id, // Link to auth.web_users
+            email: userInfo.email,
+            full_name: userInfo.name,
+            avatar_url: userInfo.avatar_url,
+            profile_complete: false,
+            onboarding_completed: false
+          });
+        }
+
+        // Merge profile data with user data
+        user = {
+          ...user,
+          ...profile
+        };
+
+        logger.info('Profile synced successfully', {
+          userId: user.id,
+          hasProfile: !!profile,
+          profileComplete: profile?.profile_complete
+        });
+      } catch (profileError) {
+        logger.error('Failed to sync profile, continuing with auth data only', {
+          userId: user.id,
+          error: profileError.message
+        });
+        // Don't fail auth if profile sync fails, just log it
+      }
+
       logger.info('User authentication successful', {
         userId: user.id,
         email: userInfo.email?.substring(0, 10) + '...',
@@ -432,7 +478,7 @@ class AuthService {
       }
 
       const { data, error } = await supabaseAdmin
-        .from('users')
+        .from('web_users')
         .select('*')
         .eq('email', email)
         .single();
