@@ -1,10 +1,12 @@
 const UserService = require('../services/UserService');
+const ProfileService = require('../services/ProfileService');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
 
 class UserController {
   constructor() {
     this.userService = new UserService();
+    this.profileService = new ProfileService();
   }
 
   // Get current user profile
@@ -13,14 +15,11 @@ class UserController {
 
     logger.info('Getting user profile', { userId });
 
-    const user = await this.userService.findById(userId);
-
-    // Remove sensitive information
-    const { password_hash, ...userProfile } = user;
+    const profile = await this.profileService.getProfile(userId);
 
     res.json({
       success: true,
-      data: userProfile
+      data: profile
     });
   });
 
@@ -31,14 +30,11 @@ class UserController {
 
     logger.info('Updating user profile', { userId, fields: Object.keys(profileData) });
 
-    const updatedUser = await this.userService.updateProfile(userId, profileData);
-
-    // Remove sensitive information
-    const { password_hash, ...userProfile } = updatedUser;
+    const updatedProfile = await this.profileService.updateProfile(userId, profileData);
 
     res.json({
       success: true,
-      data: userProfile,
+      data: updatedProfile,
       message: 'Profile updated successfully'
     });
   });
