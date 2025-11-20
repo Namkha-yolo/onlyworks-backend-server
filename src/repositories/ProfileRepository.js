@@ -75,8 +75,11 @@ class ProfileRepository extends BaseRepository {
     updateData.updated_at = new Date().toISOString();
 
     // Use UPSERT to handle cases where profile doesn't exist yet
+    // Use admin client to bypass RLS policies
     try {
-      const { data, error } = await this.supabase
+      const client = this.supabaseAdmin || this.supabase;
+
+      const { data, error } = await client
         .from(this.tableName)
         .upsert({
           id: userId,
