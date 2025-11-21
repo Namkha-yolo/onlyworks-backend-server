@@ -63,25 +63,9 @@ class UserService {
     }
   }
 
-  async updateProfile(userId, profileData) {
-    try {
-      // Validate user exists
-      await this.findById(userId);
-
-      const updatedUser = await this.userRepository.updateProfile(userId, profileData);
-
-      logger.business('user_profile_updated', {
-        user_id: userId,
-        updated_fields: Object.keys(profileData)
-      });
-
-      return updatedUser;
-    } catch (error) {
-      if (error instanceof ApiError) throw error;
-      logger.error('Error updating user profile', { error: error.message, userId, profileData });
-      throw new ApiError('INTERNAL_ERROR', { operation: 'update_user_profile' });
-    }
-  }
+  // REMOVED: updateProfile method - Use ProfileService instead
+  // web_users (UserRepository) is for authentication only
+  // Profile updates should use ProfileService and ProfileRepository
 
   async deactivateUser(userId) {
     try {

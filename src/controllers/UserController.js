@@ -65,10 +65,34 @@ class UserController {
     // Users can only access their own data
     await this.userService.validateUserAccess(userId, id);
 
+    // Get auth data from web_users
     const user = await this.userService.findById(id);
 
+    // Get profile data from profiles table
+    const profile = await this.profileService.profileRepository.findByUserId(id);
+
+    // Merge auth data with profile data
+    const completeUser = {
+      ...user,
+      // Profile fields (override auth fields if present in profile)
+      profile_complete: profile?.profile_complete || false,
+      onboarding_completed: profile?.onboarding_completed || false,
+      username: profile?.username || null,
+      field_of_work: profile?.field_of_work || null,
+      experience_level: profile?.experience_level || null,
+      company: profile?.company || null,
+      job_title: profile?.job_title || null,
+      work_goals: profile?.work_goals || null,
+      avatar_url: profile?.avatar_url || user.picture_url,
+      resume_url: profile?.resume_url || null,
+      resume_name: profile?.resume_name || null,
+      subscription_type: profile?.subscription_type || 'trial',
+      subscription_status: profile?.subscription_status || null,
+      trial_ends_at: profile?.trial_ends_at || null
+    };
+
     // Remove sensitive information
-    const { password_hash, ...userProfile } = user;
+    const { password_hash, ...userProfile } = completeUser;
 
     res.json({
       success: true,

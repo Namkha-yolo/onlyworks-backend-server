@@ -1,10 +1,12 @@
 const { asyncHandler } = require('../middleware/errorHandler');
 const AuthService = require('../services/AuthService');
+const ProfileRepository = require('../repositories/ProfileRepository');
 const { logger } = require('../utils/logger');
 
 class AuthController {
   constructor() {
     this.authService = new AuthService();
+    this.profileRepository = new ProfileRepository();
   }
 
   // Initialize OAuth flow
@@ -203,15 +205,43 @@ class AuthController {
       });
     }
 
+    // Query profiles table to get complete profile data
+    const profile = await this.profileRepository.findByUserId(req.user.userId);
+
+    // Merge auth data with profile data
+    const userData = {
+      id: req.user.userId,
+      email: req.user.email || profile?.email,
+      full_name: req.user.name || profile?.full_name,
+      picture_url: req.user.avatar_url || profile?.avatar_url,
+      provider: req.user.provider,
+      // Profile fields
+      profile_complete: profile?.profile_complete || false,
+      onboarding_completed: profile?.onboarding_completed || false,
+      username: profile?.username || null,
+      field_of_work: profile?.field_of_work || null,
+      experience_level: profile?.experience_level || null,
+      company: profile?.company || null,
+      job_title: profile?.job_title || null,
+      work_goals: profile?.work_goals || null,
+      avatar_url: profile?.avatar_url || req.user.avatar_url,
+      resume_url: profile?.resume_url || null,
+      resume_name: profile?.resume_name || null,
+      subscription_type: profile?.subscription_type || 'trial',
+      subscription_status: profile?.subscription_status || null,
+      trial_ends_at: profile?.trial_ends_at || null
+    };
+
+    logger.debug('Token validated with profile data', {
+      userId: req.user.userId,
+      profile_complete: userData.profile_complete,
+      onboarding_completed: userData.onboarding_completed,
+      hasProfile: !!profile
+    });
+
     res.json({
       success: true,
-      user: {
-        id: req.user.userId,
-        email: req.user.email,
-        full_name: req.user.name,
-        picture_url: req.user.avatar_url,
-        provider: req.user.provider
-      }
+      user: userData
     });
   });
 }

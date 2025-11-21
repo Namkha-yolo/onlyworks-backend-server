@@ -60,23 +60,9 @@ class UserRepository extends BaseRepository {
     }
   }
 
-  async updateProfile(userId, profileData) {
-    const allowedFields = [
-      'display_name', 'avatar_url', 'timezone', 'onboarding_completed',
-      'full_name', 'given_name', 'family_name', 'username',
-      'job_title', 'company', 'field_of_work', 'experience_level',
-      'occupation', 'age', 'use_case', 'terms_accepted'
-    ];
-    const updateData = {};
-
-    allowedFields.forEach(field => {
-      if (profileData[field] !== undefined) {
-        updateData[field] = profileData[field];
-      }
-    });
-
-    return this.update(userId, updateData);
-  }
+  // REMOVED: updateProfile method - profile updates should use ProfileRepository
+  // web_users table is for authentication only
+  // Profile data belongs in profiles table
 
   async updateStatus(userId, status) {
     return this.update(userId, { status });
