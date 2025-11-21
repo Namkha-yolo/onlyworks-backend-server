@@ -929,71 +929,76 @@ Analyze the screenshots and return the JSON response.`;
         onlyWorksData.ai_usage_efficiency = analysis.ai_usage_efficiency;
       }
 
-      // Approach 2: Parse malformed JSON string from AI response
-      // Check if the entire analysis is stored as a concatenated string in the 'summary' field
+      // Approach 2: Parse the actual AI response from analysis.summary
+      // The AI response contains all sections as a concatenated string like:
+      // "\"summary text\",\n  \"goal_alignment\": \"text\",\n  \"blockers\": \"text\""
       if (analysis.summary && typeof analysis.summary === 'string' &&
           analysis.summary.includes('"goal_alignment"') &&
           analysis.summary.includes('"blockers"')) {
 
-        logger.info('Detected malformed JSON string in summary field, attempting to parse');
+        logger.info('Detected OnlyWorks sections in analysis.summary, extracting via regex');
 
         try {
-          // Try to fix and parse the malformed JSON
-          let jsonString = analysis.summary;
+          const text = analysis.summary;
 
-          // Add opening brace if missing
-          if (!jsonString.trim().startsWith('{')) {
-            jsonString = '{' + jsonString;
-          }
+          // Extract each section using regex patterns
+          const extractSection = (sectionName) => {
+            // Look for patterns like "section_name": "content" or "section_name\": \"content"
+            const patterns = [
+              new RegExp(`"${sectionName}"\\s*:\\s*"([^"]*(?:\\\\.[^"]*)*)"`, 'i'),
+              new RegExp(`"${sectionName}\\"\\s*:\\s*\\"([^"]*(?:\\\\.[^"]*)*)\\"`, 'i')
+            ];
 
-          // Add closing brace if missing
-          if (!jsonString.trim().endsWith('}')) {
-            jsonString = jsonString + '}';
-          }
+            for (const pattern of patterns) {
+              const match = text.match(pattern);
+              if (match) {
+                // Clean up escaped quotes and other escape sequences
+                return match[1]
+                  .replace(/\\"/g, '"')
+                  .replace(/\\n/g, '\n')
+                  .replace(/\\\\/g, '\\')
+                  .trim();
+              }
+            }
+            return null;
+          };
 
-          // Fix common malformed patterns
-          jsonString = jsonString
-            .replace(/,\s*(\n|$)/g, '') // Remove trailing commas
-            .replace(/\n\s*/g, ' ')      // Remove newlines
-            .replace(/\s+/g, ' ')        // Normalize whitespace
-            .trim();
+          // Extract all sections
+          const extractedSummary = extractSection('summary');
+          const extractedGoalAlignment = extractSection('goal_alignment');
+          const extractedBlockers = extractSection('blockers');
+          const extractedRecognition = extractSection('recognition');
+          const extractedAutomation = extractSection('automation_opportunities');
+          const extractedCommunication = extractSection('communication_quality');
+          const extractedNextSteps = extractSection('next_steps');
+          const extractedAiEfficiency = extractSection('ai_usage_efficiency');
 
-          const parsed = JSON.parse(jsonString);
+          // Update onlyWorksData with extracted sections
+          if (extractedSummary) onlyWorksData.summary = extractedSummary;
+          if (extractedGoalAlignment) onlyWorksData.goal_alignment = extractedGoalAlignment;
+          if (extractedBlockers) onlyWorksData.blockers = extractedBlockers;
+          if (extractedRecognition) onlyWorksData.recognition = extractedRecognition;
+          if (extractedAutomation) onlyWorksData.automation_opportunities = extractedAutomation;
+          if (extractedCommunication) onlyWorksData.communication_quality = extractedCommunication;
+          if (extractedNextSteps) onlyWorksData.next_steps = extractedNextSteps;
+          if (extractedAiEfficiency) onlyWorksData.ai_usage_efficiency = extractedAiEfficiency;
 
-          // Extract sections from parsed object
-          if (parsed.summary && typeof parsed.summary === 'string') {
-            onlyWorksData.summary = parsed.summary;
-          }
-          if (parsed.goal_alignment && typeof parsed.goal_alignment === 'string') {
-            onlyWorksData.goal_alignment = parsed.goal_alignment;
-          }
-          if (parsed.blockers && typeof parsed.blockers === 'string') {
-            onlyWorksData.blockers = parsed.blockers;
-          }
-          if (parsed.recognition && typeof parsed.recognition === 'string') {
-            onlyWorksData.recognition = parsed.recognition;
-          }
-          if (parsed.automation_opportunities && typeof parsed.automation_opportunities === 'string') {
-            onlyWorksData.automation_opportunities = parsed.automation_opportunities;
-          }
-          if (parsed.communication_quality && typeof parsed.communication_quality === 'string') {
-            onlyWorksData.communication_quality = parsed.communication_quality;
-          }
-          if (parsed.next_steps && typeof parsed.next_steps === 'string') {
-            onlyWorksData.next_steps = parsed.next_steps;
-          }
-          if (parsed.ai_usage_efficiency && typeof parsed.ai_usage_efficiency === 'string') {
-            onlyWorksData.ai_usage_efficiency = parsed.ai_usage_efficiency;
-          }
-
-          logger.info('Successfully parsed OnlyWorks sections from malformed JSON', {
-            parsedSections: Object.keys(parsed),
-            extractedSections: Object.keys(onlyWorksData).filter(key => onlyWorksData[key] !== null)
+          logger.info('Successfully extracted OnlyWorks sections via regex', {
+            sectionsExtracted: {
+              summary: !!extractedSummary,
+              goal_alignment: !!extractedGoalAlignment,
+              blockers: !!extractedBlockers,
+              recognition: !!extractedRecognition,
+              automation_opportunities: !!extractedAutomation,
+              communication_quality: !!extractedCommunication,
+              next_steps: !!extractedNextSteps,
+              ai_usage_efficiency: !!extractedAiEfficiency
+            }
           });
 
-        } catch (parseError) {
-          logger.warn('Failed to parse malformed JSON in summary field', {
-            error: parseError.message,
+        } catch (extractError) {
+          logger.warn('Failed to extract OnlyWorks sections via regex', {
+            error: extractError.message,
             summaryPreview: analysis.summary.substring(0, 200) + '...'
           });
         }
