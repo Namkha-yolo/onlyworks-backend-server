@@ -209,7 +209,15 @@ class ReportsRepository extends BaseRepository {
           session_duration_minutes,
           screenshot_count,
           created_at,
-          updated_at
+          updated_at,
+          summary,
+          goal_alignment,
+          blockers,
+          recognition,
+          automation_opportunities,
+          communication_quality,
+          next_steps,
+          ai_usage_efficiency
         `)
         .eq('user_id', authUserId);
 
