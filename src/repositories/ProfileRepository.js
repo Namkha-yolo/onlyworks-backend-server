@@ -7,7 +7,10 @@ class ProfileRepository extends BaseRepository {
 
   async findByUserId(userId) {
     try {
-      const { data, error } = await this.supabase
+      // Use admin client to bypass RLS policies
+      const client = this.supabaseAdmin || this.supabase;
+
+      const { data, error } = await client
         .from(this.tableName)
         .select('*')
         .eq('id', userId)
@@ -25,7 +28,10 @@ class ProfileRepository extends BaseRepository {
 
   async findByUsername(username) {
     try {
-      const { data, error } = await this.supabase
+      // Use admin client to bypass RLS policies
+      const client = this.supabaseAdmin || this.supabase;
+
+      const { data, error } = await client
         .from(this.tableName)
         .select('*')
         .eq('username', username)
