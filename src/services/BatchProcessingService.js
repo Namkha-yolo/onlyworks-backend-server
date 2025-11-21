@@ -242,46 +242,39 @@ class BatchProcessingService {
     ).join('\n');
 
     return `
-You are OnlyWorks AI, analyzing a work session with ${imageData.length} screenshots taken over ${sessionDuration} minutes.
+You are OnlyWorks AI, a productivity mentor analyzing a work session with ${imageData.length} screenshots taken over ${sessionDuration} minutes.
 
-## TASK: Multi-Image Workflow Analysis
+## TASK: OnlyWorks Comprehensive Analysis
 Analyze these ${imageData.length} screenshots as a cohesive work session. Examine the visual content of each image to understand the user's workflow, tasks, and productivity patterns.
 
 ## SCREENSHOTS IN THIS SESSION:
 ${imageList}
 
-## ANALYSIS FRAMEWORK
+## OUTPUT FORMAT
+Return a JSON object with the exact OnlyWorks 8-section structure:
 
-### 1. WORK CLARITY & PROGRESSION
-- What specific tasks were completed or progressed across these screenshots?
-- What applications/tools were used and for what purpose?
-- How did the work evolve from the first to the last screenshot?
-- What type of work is this? (coding, design, communication, research, debugging, meetings, documentation, writing, planning)
+{
+  "summary": "Detailed, personable summary of what was accomplished. Be specific about main activities, tools used, work flow progression, and patterns observed. Write as a supportive colleague.",
+  "goal_alignment": "Analyze how well the session aligned with productive goals. What % of time on productive tasks? Which activities contributed to progress? How focused vs scattered?",
+  "blockers": "Identify obstacles to productivity. What interrupted work flow? Distraction patterns? Technical issues? Context switching? Be constructive.",
+  "recognition": "Celebrate what went well. Completed tasks? Sustained focus? Good habits? Creative problem-solving? Be motivating.",
+  "automation_opportunities": "Identify repetitive tasks that could be automated. Manual processes repeated? Workflows needing templates? Time savings estimates?",
+  "communication_quality": "Assess communication patterns. Time in communication tools? Was it productive? Response times? Meeting effectiveness?",
+  "next_steps": "Provide actionable advice. Top 3 specific actions to improve productivity. Suggested time blocks. Tools to try. Habits to build/break.",
+  "ai_usage_efficiency": "Analyze how effectively AI tools are being used: Delegation balance (tool vs dependency)? Query quality (specific vs vague)? Learning indicators? Tool selection? Iteration patterns? Time efficiency vs AI interaction time?"
+}
 
-### 2. WORKFLOW PATTERNS
-- What is the main workflow or project being worked on?
-- How much context switching occurred between different tools/tasks?
-- What was the user's focus and attention pattern?
-- Any signs of productivity, distraction, or breaks?
+## ANALYSIS GUIDELINES:
+- Be specific about what you see in the visual content
+- Focus on observable behavior patterns in the screenshots
+- Provide constructive, actionable insights
+- Be supportive and motivating while being honest
+- Look for AI tool usage patterns (ChatGPT, Claude, Copilot, etc.)
+- Analyze prompt quality, refinement cycles, and learning indicators
+- Measure productivity gains vs time spent on AI interactions
+- Consider delegation balance: using AI as a tool vs total dependency
 
-### 3. CONTRIBUTION RECOGNITION
-- What value was delivered in this session?
-- What "invisible work" occurred? (research, planning, debugging, optimization, learning)
-- What problems were solved or progress was made?
-
-### 4. PRODUCTIVITY INSIGHTS
-- What were the most productive periods in this session?
-- Any efficiency insights or recommendations?
-- Overall productivity score (0-100) for this work session
-
-## RESPONSE FORMAT
-Provide a comprehensive analysis that covers:
-1. **Session Overview**: Main work focus and key accomplishments
-2. **Detailed Activity Breakdown**: What happened in each phase of the session
-3. **Productivity Assessment**: Strengths, challenges, and overall effectiveness
-4. **Workflow Insights**: Patterns, efficiency observations, and recommendations
-
-Be specific about what you can see in the visual content of each screenshot.
+Be comprehensive but concise in each section. Help the user improve while feeling good about their progress.
 `;
   }
 
@@ -655,7 +648,16 @@ Analyze the screenshots and return the JSON response.`;
           productivityScore: aggregatedData.averageProductivity / 100,
           focusScore: aggregatedData.focusPercentage / 100,
           sessionDurationMinutes: session?.duration_seconds ? Math.round(session.duration_seconds / 60) : null,
-          screenshotCount: aggregatedData.totalScreenshots
+          screenshotCount: aggregatedData.totalScreenshots,
+          // OnlyWorks sections from AI analysis
+          summary: aggregatedData.summary,
+          goalAlignment: aggregatedData.goal_alignment,
+          blockers: aggregatedData.blockers,
+          recognition: aggregatedData.recognition,
+          automationOpportunities: aggregatedData.automation_opportunities,
+          communicationQuality: aggregatedData.communication_quality,
+          nextSteps: aggregatedData.next_steps,
+          aiUsageEfficiency: aggregatedData.ai_usage_efficiency
         };
 
         await this.reportsRepo.createSessionReport(userId, sessionId, reportData);
@@ -689,31 +691,366 @@ Analyze the screenshots and return the JSON response.`;
   }
 
   aggregateBatchReports(batchReports) {
-    const totalScreenshots = batchReports.reduce((sum, report) => sum + report.screenshot_count, 0);
+    logger.info('Aggregating batch reports', { count: batchReports.length });
 
+    if (batchReports.length === 0) {
+      logger.warn('No batch reports to aggregate');
+      return {
+        totalScreenshots: 0,
+        averageProductivity: 0,
+        focusPercentage: 0,
+        insights: ['No analysis data available'],
+        recommendations: ['Complete more session time for detailed insights']
+      };
+    }
+
+    const totalScreenshots = batchReports.reduce((sum, report) => sum + (report.screenshot_count || 0), 0);
+
+    // Try multiple possible score paths for better compatibility
     const productivityScores = batchReports
-      .map(r => r.analysis_result?.productivityMetrics?.focusScore)
-      .filter(score => score !== null && score !== undefined);
+      .map(r => {
+        const analysis = r.analysis_result || {};
+        return analysis.productivityMetrics?.focusScore ||
+               analysis.focusScore ||
+               analysis.productivity_score ||
+               null;
+      })
+      .filter(score => score !== null && score !== undefined && typeof score === 'number');
 
-    const averageProductivity = productivityScores.length > 0
-      ? productivityScores.reduce((sum, score) => sum + score, 0) / productivityScores.length
+    // Also try to extract focus scores separately
+    const focusScores = batchReports
+      .map(r => {
+        const analysis = r.analysis_result || {};
+        return analysis.focusMetrics?.score ||
+               analysis.focus_score ||
+               analysis.focusScore ||
+               null;
+      })
+      .filter(score => score !== null && score !== undefined && typeof score === 'number');
+
+    // Use whichever has more data points
+    const scores = productivityScores.length >= focusScores.length ? productivityScores : focusScores;
+
+    const averageProductivity = scores.length > 0
+      ? scores.reduce((sum, score) => sum + score, 0) / scores.length
       : 0;
 
+    // Collect insights from multiple possible paths
     const allInsights = batchReports
-      .flatMap(r => r.analysis_result?.insights || [])
+      .flatMap(r => {
+        const analysis = r.analysis_result || {};
+        return [
+          ...(analysis.insights || []),
+          ...(analysis.keyInsights || []),
+          ...(analysis.summary ? [analysis.summary] : [])
+        ];
+      })
+      .filter(insight => insight && typeof insight === 'string')
       .filter((insight, index, arr) => arr.indexOf(insight) === index);
 
+    // Collect recommendations from multiple possible paths
     const allRecommendations = batchReports
-      .flatMap(r => r.analysis_result?.recommendations || [])
+      .flatMap(r => {
+        const analysis = r.analysis_result || {};
+        return [
+          ...(analysis.recommendations || []),
+          ...(analysis.suggestions || []),
+          ...(analysis.actionItems || [])
+        ];
+      })
+      .filter(rec => rec && typeof rec === 'string')
       .filter((rec, index, arr) => arr.indexOf(rec) === index);
 
-    return {
+    // Extract OnlyWorks sections from AI analysis
+    const onlyWorksData = this.extractOnlyWorksSections(batchReports);
+
+    const result = {
       totalScreenshots,
       averageProductivity,
       focusPercentage: Math.round(averageProductivity * 100),
       insights: allInsights.slice(0, 10),
-      recommendations: allRecommendations.slice(0, 8)
+      recommendations: allRecommendations.slice(0, 8),
+      batchCount: batchReports.length,
+      scoreDataPoints: scores.length,
+      // Add OnlyWorks sections
+      ...onlyWorksData
     };
+
+    logger.info('Batch reports aggregated', {
+      totalScreenshots: result.totalScreenshots,
+      averageProductivity: result.averageProductivity,
+      insightCount: result.insights.length,
+      recommendationCount: result.recommendations.length,
+      batchCount: result.batchCount
+    });
+
+    return result;
+  }
+
+  extractOnlyWorksSections(batchReports) {
+    logger.info('Extracting OnlyWorks sections from batch reports', { count: batchReports.length });
+
+    // Extract sections from the most recent analysis that has complete OnlyWorks data
+    let onlyWorksData = {
+      summary: null,
+      goal_alignment: null,
+      blockers: null,
+      recognition: null,
+      automation_opportunities: null,
+      communication_quality: null,
+      next_steps: null,
+      ai_usage_efficiency: null
+    };
+
+    for (const report of batchReports) {
+      const analysis = report.analysis_result || {};
+
+      // Check if this analysis has the OnlyWorks structure
+      if (analysis.summary && typeof analysis.summary === 'string') {
+        onlyWorksData.summary = analysis.summary;
+      }
+      if (analysis.goal_alignment && typeof analysis.goal_alignment === 'string') {
+        onlyWorksData.goal_alignment = analysis.goal_alignment;
+      }
+      if (analysis.blockers && typeof analysis.blockers === 'string') {
+        onlyWorksData.blockers = analysis.blockers;
+      }
+      if (analysis.recognition && typeof analysis.recognition === 'string') {
+        onlyWorksData.recognition = analysis.recognition;
+      }
+      if (analysis.automation_opportunities && typeof analysis.automation_opportunities === 'string') {
+        onlyWorksData.automation_opportunities = analysis.automation_opportunities;
+      }
+      if (analysis.communication_quality && typeof analysis.communication_quality === 'string') {
+        onlyWorksData.communication_quality = analysis.communication_quality;
+      }
+      if (analysis.next_steps && typeof analysis.next_steps === 'string') {
+        onlyWorksData.next_steps = analysis.next_steps;
+      }
+      if (analysis.ai_usage_efficiency && typeof analysis.ai_usage_efficiency === 'string') {
+        onlyWorksData.ai_usage_efficiency = analysis.ai_usage_efficiency;
+      }
+    }
+
+    logger.info('OnlyWorks sections extracted', {
+      sectionsFound: Object.values(onlyWorksData).filter(v => v !== null).length,
+      hasSummary: !!onlyWorksData.summary,
+      hasAiEfficiency: !!onlyWorksData.ai_usage_efficiency
+    });
+
+    return onlyWorksData;
+  }
+
+  async getBatchStatus(userId, sessionId) {
+    try {
+      logger.info('Getting batch status for session', { userId, sessionId });
+
+      // Get all batch reports for this session to determine status
+      const batchReports = await this.batchReportRepo.getSessionReports(sessionId, {
+        limit: 100,
+        orderBy: 'created_at',
+        direction: 'DESC'
+      });
+
+      // Get screenshots to determine how many need processing
+      const screenshots = await this.screenshotRepo.findBySession(sessionId, userId, { limit: 1000 });
+      const totalScreenshots = screenshots.length;
+
+      // Calculate processed screenshots from batch reports
+      const processedScreenshots = batchReports.reduce((sum, report) => sum + (report.screenshot_count || 0), 0);
+      const pendingScreenshots = Math.max(0, totalScreenshots - processedScreenshots);
+
+      const status = {
+        sessionId,
+        totalScreenshots,
+        processedScreenshots,
+        pendingScreenshots,
+        totalBatches: batchReports.length,
+        activeBatches: 0, // We don't currently track active batches, so assume 0
+        pendingBatches: pendingScreenshots > 0 ? Math.ceil(pendingScreenshots / 30) : 0, // Estimate pending batches
+        status: pendingScreenshots > 0 ? 'processing' : 'completed',
+        allBatchesCompleted: pendingScreenshots === 0,
+        lastUpdated: new Date().toISOString()
+      };
+
+      logger.info('Batch status calculated', status);
+      return status;
+    } catch (error) {
+      logger.error('Failed to get batch status', { error: error.message, userId, sessionId });
+      // Return a safe default status
+      return {
+        sessionId,
+        totalScreenshots: 0,
+        processedScreenshots: 0,
+        pendingScreenshots: 0,
+        totalBatches: 0,
+        activeBatches: 0,
+        pendingBatches: 0,
+        status: 'completed',
+        allBatchesCompleted: true,
+        error: error.message,
+        lastUpdated: new Date().toISOString()
+      };
+    }
+  }
+
+  async getBatchReports(userId, sessionId, options = {}) {
+    try {
+      logger.info('Getting batch reports for session', { userId, sessionId, options });
+
+      const { limit = 10, offset = 0 } = options;
+
+      const batchReports = await this.batchReportRepo.getSessionReports(sessionId, {
+        limit,
+        offset,
+        orderBy: 'created_at',
+        direction: 'DESC'
+      });
+
+      logger.info('Batch reports retrieved', { count: batchReports.length, sessionId });
+      return batchReports;
+    } catch (error) {
+      logger.error('Failed to get batch reports', { error: error.message, userId, sessionId });
+      throw new ApiError('INTERNAL_ERROR', { operation: 'get_batch_reports' });
+    }
+  }
+
+  async generateShareableSessionSummary(userId, sessionId, options = {}) {
+    try {
+      logger.info('Generating shareable session summary', { userId, sessionId, options });
+
+      const { includePrivateData = false, shareWithTeam = false, expiresInDays = 7 } = options;
+
+      // Generate the session summary first
+      const summary = await this.generateSessionSummary(userId, sessionId);
+
+      // Create a shareable version (remove sensitive data if needed)
+      const shareableData = {
+        ...summary,
+        // Remove sensitive user data if not including private data
+        ...(includePrivateData ? {} : {
+          userId: '[Hidden]',
+          userEmail: '[Hidden]'
+        }),
+        shareSettings: {
+          includePrivateData,
+          shareWithTeam,
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + (expiresInDays * 24 * 60 * 60 * 1000)).toISOString()
+        }
+      };
+
+      // Generate share token
+      const shareToken = `share_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Store in a simple in-memory cache for now (in production, use Redis or database)
+      if (!global.shareCache) {
+        global.shareCache = new Map();
+      }
+      global.shareCache.set(shareToken, shareableData);
+
+      // Clean up expired shares
+      this.cleanupExpiredShares();
+
+      logger.info('Shareable session summary created', { shareToken, sessionId });
+
+      return {
+        shareToken,
+        shareUrl: `/api/batch/shared/${shareToken}`,
+        expiresAt: shareableData.shareSettings.expiresAt,
+        summary: shareableData
+      };
+    } catch (error) {
+      logger.error('Failed to generate shareable session summary', { error: error.message, userId, sessionId });
+      throw new ApiError('INTERNAL_ERROR', { operation: 'generate_shareable_summary' });
+    }
+  }
+
+  async getSharedReport(shareToken) {
+    try {
+      logger.info('Getting shared report', { shareToken });
+
+      if (!global.shareCache) {
+        return null;
+      }
+
+      const sharedData = global.shareCache.get(shareToken);
+      if (!sharedData) {
+        return null;
+      }
+
+      // Check if expired
+      const expiresAt = new Date(sharedData.shareSettings.expiresAt);
+      if (expiresAt < new Date()) {
+        global.shareCache.delete(shareToken);
+        return null;
+      }
+
+      logger.info('Shared report retrieved', { shareToken });
+      return sharedData;
+    } catch (error) {
+      logger.error('Failed to get shared report', { error: error.message, shareToken });
+      return null;
+    }
+  }
+
+  async revokeSharedReport(shareToken, userId) {
+    try {
+      logger.info('Revoking shared report', { shareToken, userId });
+
+      if (!global.shareCache) {
+        return false;
+      }
+
+      const sharedData = global.shareCache.get(shareToken);
+      if (!sharedData) {
+        return false;
+      }
+
+      // Check if user owns this share (simple check)
+      // In production, you'd want proper ownership validation
+      global.shareCache.delete(shareToken);
+
+      logger.info('Shared report revoked', { shareToken, userId });
+      return true;
+    } catch (error) {
+      logger.error('Failed to revoke shared report', { error: error.message, shareToken, userId });
+      return false;
+    }
+  }
+
+  async getUserSharedReports(userId, options = {}) {
+    try {
+      logger.info('Getting user shared reports', { userId, options });
+
+      const { limit = 20, offset = 0 } = options;
+
+      // For now, return empty array since we don't track user ownership in the simple cache
+      // In production, you'd store shares in database with user_id
+      const userShares = [];
+
+      logger.info('User shared reports retrieved', { count: userShares.length, userId });
+      return userShares;
+    } catch (error) {
+      logger.error('Failed to get user shared reports', { error: error.message, userId });
+      throw new ApiError('INTERNAL_ERROR', { operation: 'get_user_shared_reports' });
+    }
+  }
+
+  cleanupExpiredShares() {
+    try {
+      if (!global.shareCache) return;
+
+      const now = new Date();
+      for (const [token, data] of global.shareCache.entries()) {
+        const expiresAt = new Date(data.shareSettings?.expiresAt || 0);
+        if (expiresAt < now) {
+          global.shareCache.delete(token);
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to cleanup expired shares', { error: error.message });
+    }
   }
 
   formatDuration(seconds) {

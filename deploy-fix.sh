@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 # Deployment script for fixing Supabase getUserByEmail issue

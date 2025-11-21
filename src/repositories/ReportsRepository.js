@@ -50,7 +50,16 @@ class ReportsRepository extends BaseRepository {
           productivity_score: reportData.productivityScore || reportData.averageProductivity || null,
           focus_score: reportData.focusScore || reportData.focusPercentage ? (reportData.focusPercentage / 100) : null,
           session_duration_minutes: reportData.sessionDurationMinutes || reportData.durationMinutes || null,
-          screenshot_count: reportData.screenshotCount || reportData.totalScreenshots || 0
+          screenshot_count: reportData.screenshotCount || reportData.totalScreenshots || 0,
+          // OnlyWorks sections
+          summary: reportData.summary,
+          goal_alignment: reportData.goalAlignment,
+          blockers: reportData.blockers,
+          recognition: reportData.recognition,
+          automation_opportunities: reportData.automationOpportunities,
+          communication_quality: reportData.communicationQuality,
+          next_steps: reportData.nextSteps,
+          ai_usage_efficiency: reportData.aiUsageEfficiency
         }, userId);
       }
 
@@ -66,7 +75,16 @@ class ReportsRepository extends BaseRepository {
         productivity_score: reportData.productivityScore || reportData.averageProductivity || null,
         focus_score: reportData.focusScore || reportData.focusPercentage ? (reportData.focusPercentage / 100) : null,
         session_duration_minutes: reportData.sessionDurationMinutes || reportData.durationMinutes || null,
-        screenshot_count: reportData.screenshotCount || reportData.totalScreenshots || 0
+        screenshot_count: reportData.screenshotCount || reportData.totalScreenshots || 0,
+        // OnlyWorks sections from AI analysis
+        summary: reportData.summary,
+        goal_alignment: reportData.goalAlignment,
+        blockers: reportData.blockers,
+        recognition: reportData.recognition,
+        automation_opportunities: reportData.automationOpportunities,
+        communication_quality: reportData.communicationQuality,
+        next_steps: reportData.nextSteps,
+        ai_usage_efficiency: reportData.aiUsageEfficiency
       };
 
       logger.info('Creating session report', {
@@ -130,7 +148,17 @@ class ReportsRepository extends BaseRepository {
 
       const { data, error } = await client
         .from(this.tableName)
-        .select('*')
+        .select(`
+          *,
+          summary,
+          goal_alignment,
+          blockers,
+          recognition,
+          automation_opportunities,
+          communication_quality,
+          next_steps,
+          ai_usage_efficiency
+        `)
         .eq('session_id', sessionId)
         .eq('user_id', authUserId)
         .single();
@@ -235,7 +263,17 @@ class ReportsRepository extends BaseRepository {
 
       const { data, error } = await client
         .from(this.tableName)
-        .select('*')
+        .select(`
+          *,
+          summary,
+          goal_alignment,
+          blockers,
+          recognition,
+          automation_opportunities,
+          communication_quality,
+          next_steps,
+          ai_usage_efficiency
+        `)
         .eq('id', reportId)
         .eq('user_id', authUserId)
         .single();
