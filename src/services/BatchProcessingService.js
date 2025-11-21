@@ -566,6 +566,75 @@ Analyze the screenshots and return the JSON response.`;
     try {
       logger.info('Generating session summary', { userId, sessionId });
 
+      // First, check if comprehensive report already exists in reports table
+      try {
+        logger.info('Checking for existing comprehensive report', { sessionId, userId });
+        const existingReport = await this.reportsRepo.getBySessionId(sessionId, userId);
+
+        if (existingReport && existingReport.summary) {
+          logger.info('Found existing comprehensive report with OnlyWorks sections', {
+            sessionId,
+            reportId: existingReport.id,
+            hasSections: {
+              summary: !!existingReport.summary,
+              goal_alignment: !!existingReport.goal_alignment,
+              blockers: !!existingReport.blockers,
+              recognition: !!existingReport.recognition,
+              automation_opportunities: !!existingReport.automation_opportunities,
+              communication_quality: !!existingReport.communication_quality,
+              next_steps: !!existingReport.next_steps,
+              ai_usage_efficiency: !!existingReport.ai_usage_efficiency
+            }
+          });
+
+          // Return the comprehensive report with all OnlyWorks sections
+          const comprehensiveResult = {
+            sessionId: existingReport.session_id,
+            sessionName: existingReport.title || `Work Session ${new Date(existingReport.created_at).toLocaleDateString()}`,
+            goalDescription: null,
+            duration: {
+              seconds: existingReport.session_duration_minutes ? existingReport.session_duration_minutes * 60 : 0,
+              formatted: this.formatDuration(existingReport.session_duration_minutes ? existingReport.session_duration_minutes * 60 : 0)
+            },
+            timeRange: {
+              startedAt: existingReport.created_at,
+              endedAt: existingReport.updated_at || existingReport.created_at
+            },
+            overview: existingReport.executive_summary || 'Session analyzed with comprehensive AI insights',
+            batchAnalysis: {
+              totalBatches: 1,
+              totalScreenshots: existingReport.screenshot_count || 0,
+              averageProductivity: existingReport.productivity_score ? Math.round(existingReport.productivity_score * 100) : 0,
+              focusPercentage: existingReport.focus_score ? Math.round(existingReport.focus_score * 100) : 0
+            },
+            // Include all OnlyWorks sections
+            summary: existingReport.summary,
+            goal_alignment: existingReport.goal_alignment,
+            blockers: existingReport.blockers,
+            recognition: existingReport.recognition,
+            automation_opportunities: existingReport.automation_opportunities,
+            communication_quality: existingReport.communication_quality,
+            next_steps: existingReport.next_steps,
+            ai_usage_efficiency: existingReport.ai_usage_efficiency,
+            // Metadata
+            productivity_score: existingReport.productivity_score,
+            focus_score: existingReport.focus_score,
+            screenshot_count: existingReport.screenshot_count,
+            generatedAt: existingReport.updated_at || existingReport.created_at
+          };
+
+          logger.info('Returning comprehensive report with OnlyWorks sections', { sessionId, reportId: existingReport.id });
+          return comprehensiveResult;
+        }
+
+        logger.info('No existing comprehensive report found, generating new summary', { sessionId });
+      } catch (reportError) {
+        logger.warn('Error checking for existing report, proceeding with generation', {
+          error: reportError.message,
+          sessionId
+        });
+      }
+
       // Get batch reports for the session
       let batchReports = [];
       try {
