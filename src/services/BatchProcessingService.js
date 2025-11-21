@@ -571,10 +571,15 @@ Analyze the screenshots and return the JSON response.`;
         logger.info('Checking for existing comprehensive report', { sessionId, userId });
         const existingReport = await this.reportsRepo.getBySessionId(sessionId, userId);
 
-        if (existingReport && existingReport.summary) {
-          logger.info('Found existing comprehensive report with OnlyWorks sections', {
+        if (existingReport) {
+          logger.info('Found existing report, checking for OnlyWorks sections', {
             sessionId,
             reportId: existingReport.id,
+            hasBasicData: {
+              title: !!existingReport.title,
+              executive_summary: !!existingReport.executive_summary,
+              comprehensive_report: !!existingReport.comprehensive_report
+            },
             hasSections: {
               summary: !!existingReport.summary,
               goal_alignment: !!existingReport.goal_alignment,
@@ -586,6 +591,22 @@ Analyze the screenshots and return the JSON response.`;
               ai_usage_efficiency: !!existingReport.ai_usage_efficiency
             }
           });
+
+          // Check if we have any OnlyWorks sections
+          const hasOnlyWorksSections = existingReport.summary ||
+                                     existingReport.goal_alignment ||
+                                     existingReport.blockers ||
+                                     existingReport.recognition ||
+                                     existingReport.automation_opportunities ||
+                                     existingReport.communication_quality ||
+                                     existingReport.next_steps ||
+                                     existingReport.ai_usage_efficiency;
+
+          if (hasOnlyWorksSections) {
+            logger.info('Found comprehensive report with OnlyWorks sections', {
+              sessionId,
+              reportId: existingReport.id
+            });
 
           // Return the comprehensive report with all OnlyWorks sections
           const comprehensiveResult = {
@@ -623,8 +644,14 @@ Analyze the screenshots and return the JSON response.`;
             generatedAt: existingReport.updated_at || existingReport.created_at
           };
 
-          logger.info('Returning comprehensive report with OnlyWorks sections', { sessionId, reportId: existingReport.id });
-          return comprehensiveResult;
+            logger.info('Returning comprehensive report with OnlyWorks sections', { sessionId, reportId: existingReport.id });
+            return comprehensiveResult;
+          } else {
+            logger.warn('Report exists but missing OnlyWorks sections, will regenerate', {
+              sessionId,
+              reportId: existingReport.id
+            });
+          }
         }
 
         logger.info('No existing comprehensive report found, generating new summary', { sessionId });
