@@ -592,7 +592,7 @@ Analyze the screenshots and return the JSON response.`;
             }
           });
 
-          // Check if we have any OnlyWorks sections
+          // Check if we have any OnlyWorks sections (including cases where summary might be malformed but other fields exist)
           const hasOnlyWorksSections = existingReport.summary ||
                                      existingReport.goal_alignment ||
                                      existingReport.blockers ||
@@ -601,6 +601,22 @@ Analyze the screenshots and return the JSON response.`;
                                      existingReport.communication_quality ||
                                      existingReport.next_steps ||
                                      existingReport.ai_usage_efficiency;
+
+          logger.info('Checking OnlyWorks sections availability', {
+            sessionId,
+            reportId: existingReport.id,
+            hasAnySections: hasOnlyWorksSections,
+            sectionStatus: {
+              summary: !!existingReport.summary,
+              goal_alignment: !!existingReport.goal_alignment,
+              blockers: !!existingReport.blockers,
+              recognition: !!existingReport.recognition,
+              automation_opportunities: !!existingReport.automation_opportunities,
+              communication_quality: !!existingReport.communication_quality,
+              next_steps: !!existingReport.next_steps,
+              ai_usage_efficiency: !!existingReport.ai_usage_efficiency
+            }
+          });
 
           if (hasOnlyWorksSections) {
             logger.info('Found comprehensive report with OnlyWorks sections', {
@@ -647,7 +663,20 @@ Analyze the screenshots and return the JSON response.`;
             generatedAt: existingReport.updated_at || existingReport.created_at
           };
 
-            logger.info('Returning comprehensive report with OnlyWorks sections', { sessionId, reportId: existingReport.id });
+            logger.info('Returning comprehensive report with OnlyWorks sections', {
+              sessionId,
+              reportId: existingReport.id,
+              returnedSections: {
+                summary: !!cleanSummary,
+                goal_alignment: !!existingReport.goal_alignment,
+                blockers: !!existingReport.blockers,
+                recognition: !!existingReport.recognition,
+                automation_opportunities: !!existingReport.automation_opportunities,
+                communication_quality: !!existingReport.communication_quality,
+                next_steps: !!existingReport.next_steps,
+                ai_usage_efficiency: !!existingReport.ai_usage_efficiency
+              }
+            });
             return comprehensiveResult;
           } else {
             logger.warn('Report exists but missing OnlyWorks sections, will regenerate', {
