@@ -112,7 +112,34 @@ class UserService {
   async getSettings(userId) {
     try {
       const settings = await this.userRepository.getUserSettings(userId);
-      return settings?.settings || {};
+
+      if (!settings) {
+        // Return default settings if none exist
+        return {
+          username: '',
+          email: '',
+          phone: '',
+          avatar_url: '',
+          theme: 'light',
+          language: 'en',
+          email_notifications: true,
+          push_notifications: true,
+          marketing_emails: false
+        };
+      }
+
+      // Return the individual fields, not the generic settings JSONB
+      return {
+        username: settings.username || '',
+        email: settings.email || '',
+        phone: settings.phone || '',
+        avatar: settings.avatar_url || '',
+        theme: settings.theme || 'light',
+        language: settings.language || 'en',
+        email_notifications: settings.email_notifications !== undefined ? settings.email_notifications : true,
+        push_notifications: settings.push_notifications !== undefined ? settings.push_notifications : true,
+        marketing_emails: settings.marketing_emails !== undefined ? settings.marketing_emails : false
+      };
     } catch (error) {
       logger.error('Error getting user settings', { error: error.message, userId });
       throw new ApiError('INTERNAL_ERROR', { operation: 'get_user_settings' });
@@ -122,7 +149,19 @@ class UserService {
   async updateSettings(userId, settingsData) {
     try {
       const updatedSettings = await this.userRepository.updateUserSettings(userId, settingsData);
-      return updatedSettings.settings;
+
+      // Return the updated settings in the same format as getSettings
+      return {
+        username: updatedSettings.username || '',
+        email: updatedSettings.email || '',
+        phone: updatedSettings.phone || '',
+        avatar: updatedSettings.avatar_url || '',
+        theme: updatedSettings.theme || 'light',
+        language: updatedSettings.language || 'en',
+        email_notifications: updatedSettings.email_notifications !== undefined ? updatedSettings.email_notifications : true,
+        push_notifications: updatedSettings.push_notifications !== undefined ? updatedSettings.push_notifications : true,
+        marketing_emails: updatedSettings.marketing_emails !== undefined ? updatedSettings.marketing_emails : false
+      };
     } catch (error) {
       logger.error('Error updating user settings', { error: error.message, userId });
       throw new ApiError('INTERNAL_ERROR', { operation: 'update_user_settings' });

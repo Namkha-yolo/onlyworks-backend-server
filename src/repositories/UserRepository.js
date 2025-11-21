@@ -88,13 +88,24 @@ class UserRepository extends BaseRepository {
 
   async updateUserSettings(userId, settingsData) {
     try {
+      // Map frontend settings to database columns
+      const userSettingsRecord = {
+        user_id: userId,
+        username: settingsData.username || null,
+        email: settingsData.email || null,
+        phone: settingsData.phone || null,
+        avatar_url: settingsData.avatar || null,
+        theme: settingsData.theme || 'light',
+        language: settingsData.language || 'en',
+        email_notifications: settingsData.email_notifications !== undefined ? settingsData.email_notifications : true,
+        push_notifications: settingsData.push_notifications !== undefined ? settingsData.push_notifications : true,
+        marketing_emails: settingsData.marketing_emails !== undefined ? settingsData.marketing_emails : false,
+        updated_at: new Date().toISOString()
+      };
+
       const { data, error } = await this.supabase
         .from('user_settings')
-        .upsert({
-          user_id: userId,
-          settings: settingsData,
-          updated_at: new Date().toISOString()
-        })
+        .upsert(userSettingsRecord)
         .select()
         .single();
 
