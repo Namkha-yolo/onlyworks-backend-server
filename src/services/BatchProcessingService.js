@@ -1106,8 +1106,33 @@ Analyze the screenshots and return the JSON response.`;
 
       const { includePrivateData = false, shareWithTeam = false, expiresInDays = 7 } = options;
 
-      // Generate the session summary first
-      const summary = await this.generateSessionSummary(userId, sessionId);
+      // First check if a report already exists to avoid regenerating
+      let summary;
+      const existingReport = await this.reportsRepository.getBySessionId(sessionId, userId);
+
+      if (existingReport) {
+        logger.info('Using existing report for shareable summary', { sessionId, reportId: existingReport.id });
+        // Use existing report data
+        summary = {
+          sessionId: sessionId,
+          userId: userId,
+          report: existingReport,
+          onlyWorksData: {
+            summary: existingReport.summary,
+            goalAlignment: existingReport.goal_alignment,
+            blockers: existingReport.blockers,
+            recognition: existingReport.recognition,
+            automationOpportunities: existingReport.automation_opportunities,
+            communicationQuality: existingReport.communication_quality,
+            nextSteps: existingReport.next_steps,
+            aiUsageEfficiency: existingReport.ai_usage_efficiency
+          }
+        };
+      } else {
+        logger.info('No existing report found, generating new summary', { sessionId });
+        // Only generate if no report exists
+        summary = await this.generateSessionSummary(userId, sessionId);
+      }
 
       // Create a shareable version (remove sensitive data if needed)
       const shareableData = {
