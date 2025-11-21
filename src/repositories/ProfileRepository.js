@@ -132,7 +132,10 @@ class ProfileRepository extends BaseRepository {
         updated_at: new Date().toISOString()
       };
 
-      const { data: profile, error } = await this.supabase
+      // Use admin client to bypass RLS policies
+      const client = this.supabaseAdmin || this.supabase;
+
+      const { data: profile, error } = await client
         .from(this.tableName)
         .insert([profileRecord])
         .select()
