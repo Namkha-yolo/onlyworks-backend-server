@@ -627,6 +627,69 @@ Analyze the screenshots and return the JSON response.`;
           // Clean malformed summary data if needed
           const cleanSummary = this.cleanMalformedSummary(existingReport.summary);
 
+          // Extract OnlyWorks sections from summary if they're not in individual columns
+          let extractedSections = {
+            goal_alignment: existingReport.goal_alignment,
+            blockers: existingReport.blockers,
+            recognition: existingReport.recognition,
+            automation_opportunities: existingReport.automation_opportunities,
+            communication_quality: existingReport.communication_quality,
+            next_steps: existingReport.next_steps,
+            ai_usage_efficiency: existingReport.ai_usage_efficiency
+          };
+
+          // If individual sections are null but summary exists, try to extract them
+          if (!existingReport.goal_alignment && cleanSummary &&
+              cleanSummary.includes('"goal_alignment"') && cleanSummary.includes('"blockers"')) {
+
+            logger.info('Extracting OnlyWorks sections from summary field for existing report', {
+              sessionId,
+              reportId: existingReport.id
+            });
+
+            const extractSection = (sectionName) => {
+              const patterns = [
+                new RegExp(`"${sectionName}"\\s*:\\s*"([^"]*(?:\\\\.[^"]*)*)"`, 'i'),
+                new RegExp(`"${sectionName}\\"\\s*:\\s*\\"([^"]*(?:\\\\.[^"]*)*)\\"`, 'i')
+              ];
+
+              for (const pattern of patterns) {
+                const match = cleanSummary.match(pattern);
+                if (match) {
+                  return match[1]
+                    .replace(/\\"/g, '"')
+                    .replace(/\\n/g, '\n')
+                    .replace(/\\\\/g, '\\')
+                    .trim();
+                }
+              }
+              return null;
+            };
+
+            extractedSections = {
+              goal_alignment: extractSection('goal_alignment') || existingReport.goal_alignment,
+              blockers: extractSection('blockers') || existingReport.blockers,
+              recognition: extractSection('recognition') || existingReport.recognition,
+              automation_opportunities: extractSection('automation_opportunities') || existingReport.automation_opportunities,
+              communication_quality: extractSection('communication_quality') || existingReport.communication_quality,
+              next_steps: extractSection('next_steps') || existingReport.next_steps,
+              ai_usage_efficiency: extractSection('ai_usage_efficiency') || existingReport.ai_usage_efficiency
+            };
+
+            logger.info('Extracted sections from summary', {
+              sessionId,
+              extractedSections: {
+                goal_alignment: !!extractedSections.goal_alignment,
+                blockers: !!extractedSections.blockers,
+                recognition: !!extractedSections.recognition,
+                automation_opportunities: !!extractedSections.automation_opportunities,
+                communication_quality: !!extractedSections.communication_quality,
+                next_steps: !!extractedSections.next_steps,
+                ai_usage_efficiency: !!extractedSections.ai_usage_efficiency
+              }
+            });
+          }
+
           // Return the comprehensive report with all OnlyWorks sections
           const comprehensiveResult = {
             sessionId: existingReport.session_id,
@@ -647,15 +710,15 @@ Analyze the screenshots and return the JSON response.`;
               averageProductivity: existingReport.productivity_score ? Math.round(existingReport.productivity_score * 100) : 0,
               focusPercentage: existingReport.focus_score ? Math.round(existingReport.focus_score * 100) : 0
             },
-            // Include all OnlyWorks sections with cleaned summary
+            // Include all OnlyWorks sections with extracted/existing data
             summary: cleanSummary,
-            goal_alignment: existingReport.goal_alignment,
-            blockers: existingReport.blockers,
-            recognition: existingReport.recognition,
-            automation_opportunities: existingReport.automation_opportunities,
-            communication_quality: existingReport.communication_quality,
-            next_steps: existingReport.next_steps,
-            ai_usage_efficiency: existingReport.ai_usage_efficiency,
+            goal_alignment: extractedSections.goal_alignment,
+            blockers: extractedSections.blockers,
+            recognition: extractedSections.recognition,
+            automation_opportunities: extractedSections.automation_opportunities,
+            communication_quality: extractedSections.communication_quality,
+            next_steps: extractedSections.next_steps,
+            ai_usage_efficiency: extractedSections.ai_usage_efficiency,
             // Metadata
             productivity_score: existingReport.productivity_score,
             focus_score: existingReport.focus_score,
@@ -668,13 +731,13 @@ Analyze the screenshots and return the JSON response.`;
               reportId: existingReport.id,
               returnedSections: {
                 summary: !!cleanSummary,
-                goal_alignment: !!existingReport.goal_alignment,
-                blockers: !!existingReport.blockers,
-                recognition: !!existingReport.recognition,
-                automation_opportunities: !!existingReport.automation_opportunities,
-                communication_quality: !!existingReport.communication_quality,
-                next_steps: !!existingReport.next_steps,
-                ai_usage_efficiency: !!existingReport.ai_usage_efficiency
+                goal_alignment: !!extractedSections.goal_alignment,
+                blockers: !!extractedSections.blockers,
+                recognition: !!extractedSections.recognition,
+                automation_opportunities: !!extractedSections.automation_opportunities,
+                communication_quality: !!extractedSections.communication_quality,
+                next_steps: !!extractedSections.next_steps,
+                ai_usage_efficiency: !!extractedSections.ai_usage_efficiency
               }
             });
             return comprehensiveResult;
