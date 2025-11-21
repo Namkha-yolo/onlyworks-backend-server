@@ -208,6 +208,19 @@ class AuthController {
     // Query profiles table to get complete profile data
     const profile = await this.profileRepository.findByUserId(req.user.userId);
 
+    logger.info('Profile data fetched for token validation', {
+      userId: req.user.userId,
+      hasProfile: !!profile,
+      profileData: profile ? {
+        email: profile.email,
+        username: profile.username,
+        field_of_work: profile.field_of_work,
+        experience_level: profile.experience_level,
+        profile_complete: profile.profile_complete,
+        onboarding_completed: profile.onboarding_completed
+      } : null
+    });
+
     // Merge auth data with profile data
     const userData = {
       id: req.user.userId,
@@ -232,11 +245,12 @@ class AuthController {
       trial_ends_at: profile?.trial_ends_at || null
     };
 
-    logger.debug('Token validated with profile data', {
+    logger.info('Token validated, returning user data', {
       userId: req.user.userId,
       profile_complete: userData.profile_complete,
       onboarding_completed: userData.onboarding_completed,
-      hasProfile: !!profile
+      username: userData.username,
+      field_of_work: userData.field_of_work
     });
 
     res.json({
