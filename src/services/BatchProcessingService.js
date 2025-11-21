@@ -608,6 +608,9 @@ Analyze the screenshots and return the JSON response.`;
               reportId: existingReport.id
             });
 
+          // Clean malformed summary data if needed
+          const cleanSummary = this.cleanMalformedSummary(existingReport.summary);
+
           // Return the comprehensive report with all OnlyWorks sections
           const comprehensiveResult = {
             sessionId: existingReport.session_id,
@@ -628,8 +631,8 @@ Analyze the screenshots and return the JSON response.`;
               averageProductivity: existingReport.productivity_score ? Math.round(existingReport.productivity_score * 100) : 0,
               focusPercentage: existingReport.focus_score ? Math.round(existingReport.focus_score * 100) : 0
             },
-            // Include all OnlyWorks sections
-            summary: existingReport.summary,
+            // Include all OnlyWorks sections with cleaned summary
+            summary: cleanSummary,
             goal_alignment: existingReport.goal_alignment,
             blockers: existingReport.blockers,
             recognition: existingReport.recognition,
@@ -1024,6 +1027,54 @@ Analyze the screenshots and return the JSON response.`;
     });
 
     return onlyWorksData;
+  }
+
+  cleanMalformedSummary(summaryText) {
+    if (!summaryText || typeof summaryText !== 'string') {
+      return null;
+    }
+
+    // Check if the summary contains malformed JSON (has goal_alignment, blockers, etc.)
+    if (summaryText.includes('"goal_alignment"') || summaryText.includes('"blockers"')) {
+      logger.info('Detected malformed summary field, extracting clean summary');
+
+      // Extract just the summary part - text before the first occurrence of JSON structure
+      const patterns = [
+        // Pattern 1: Text ending with quote, comma, newline then JSON structure
+        /^"([^"]*(?:\\.[^"]*)*)"(?:\s*,\s*\n)/,
+        // Pattern 2: Text ending with quote, comma, then space and JSON
+        /^"([^"]*(?:\\.[^"]*)*)"(?:\s*,\s*)/,
+        // Pattern 3: Just extract text before ", followed by a quote and key
+        /^"([^"]*(?:\\.[^"]*)*)"(?=,\s*"[a-z_]+")/
+      ];
+
+      for (const pattern of patterns) {
+        const match = summaryText.match(pattern);
+        if (match) {
+          const cleanText = match[1]
+            .replace(/\\"/g, '"')
+            .replace(/\\n/g, '\n')
+            .replace(/\\\\/g, '\\')
+            .trim();
+
+          logger.info('Successfully extracted clean summary', {
+            originalLength: summaryText.length,
+            cleanLength: cleanText.length,
+            preview: cleanText.substring(0, 100) + '...'
+          });
+
+          return cleanText;
+        }
+      }
+
+      logger.warn('Could not extract clean summary from malformed text, returning first 500 characters');
+      // Fallback: return first part of the text
+      const firstPart = summaryText.substring(0, 500).replace(/[",\n]*$/, '').trim();
+      return firstPart || summaryText;
+    }
+
+    // Summary is already clean, return as-is
+    return summaryText;
   }
 
   async getBatchStatus(userId, sessionId) {
