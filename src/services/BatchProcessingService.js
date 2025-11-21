@@ -901,7 +901,9 @@ Analyze the screenshots and return the JSON response.`;
     for (const report of batchReports) {
       const analysis = report.analysis_result || {};
 
-      // Check if this analysis has the OnlyWorks structure
+      // Try multiple approaches to extract OnlyWorks sections
+
+      // Approach 1: Check if this analysis has the OnlyWorks structure as separate fields
       if (analysis.summary && typeof analysis.summary === 'string') {
         onlyWorksData.summary = analysis.summary;
       }
@@ -926,12 +928,94 @@ Analyze the screenshots and return the JSON response.`;
       if (analysis.ai_usage_efficiency && typeof analysis.ai_usage_efficiency === 'string') {
         onlyWorksData.ai_usage_efficiency = analysis.ai_usage_efficiency;
       }
+
+      // Approach 2: Parse malformed JSON string from AI response
+      // Check if the entire analysis is stored as a concatenated string in the 'summary' field
+      if (analysis.summary && typeof analysis.summary === 'string' &&
+          analysis.summary.includes('"goal_alignment"') &&
+          analysis.summary.includes('"blockers"')) {
+
+        logger.info('Detected malformed JSON string in summary field, attempting to parse');
+
+        try {
+          // Try to fix and parse the malformed JSON
+          let jsonString = analysis.summary;
+
+          // Add opening brace if missing
+          if (!jsonString.trim().startsWith('{')) {
+            jsonString = '{' + jsonString;
+          }
+
+          // Add closing brace if missing
+          if (!jsonString.trim().endsWith('}')) {
+            jsonString = jsonString + '}';
+          }
+
+          // Fix common malformed patterns
+          jsonString = jsonString
+            .replace(/,\s*(\n|$)/g, '') // Remove trailing commas
+            .replace(/\n\s*/g, ' ')      // Remove newlines
+            .replace(/\s+/g, ' ')        // Normalize whitespace
+            .trim();
+
+          const parsed = JSON.parse(jsonString);
+
+          // Extract sections from parsed object
+          if (parsed.summary && typeof parsed.summary === 'string') {
+            onlyWorksData.summary = parsed.summary;
+          }
+          if (parsed.goal_alignment && typeof parsed.goal_alignment === 'string') {
+            onlyWorksData.goal_alignment = parsed.goal_alignment;
+          }
+          if (parsed.blockers && typeof parsed.blockers === 'string') {
+            onlyWorksData.blockers = parsed.blockers;
+          }
+          if (parsed.recognition && typeof parsed.recognition === 'string') {
+            onlyWorksData.recognition = parsed.recognition;
+          }
+          if (parsed.automation_opportunities && typeof parsed.automation_opportunities === 'string') {
+            onlyWorksData.automation_opportunities = parsed.automation_opportunities;
+          }
+          if (parsed.communication_quality && typeof parsed.communication_quality === 'string') {
+            onlyWorksData.communication_quality = parsed.communication_quality;
+          }
+          if (parsed.next_steps && typeof parsed.next_steps === 'string') {
+            onlyWorksData.next_steps = parsed.next_steps;
+          }
+          if (parsed.ai_usage_efficiency && typeof parsed.ai_usage_efficiency === 'string') {
+            onlyWorksData.ai_usage_efficiency = parsed.ai_usage_efficiency;
+          }
+
+          logger.info('Successfully parsed OnlyWorks sections from malformed JSON', {
+            parsedSections: Object.keys(parsed),
+            extractedSections: Object.keys(onlyWorksData).filter(key => onlyWorksData[key] !== null)
+          });
+
+        } catch (parseError) {
+          logger.warn('Failed to parse malformed JSON in summary field', {
+            error: parseError.message,
+            summaryPreview: analysis.summary.substring(0, 200) + '...'
+          });
+        }
+      }
     }
 
+    const sectionsFound = Object.values(onlyWorksData).filter(v => v !== null).length;
+
     logger.info('OnlyWorks sections extracted', {
-      sectionsFound: Object.values(onlyWorksData).filter(v => v !== null).length,
+      sectionsFound,
       hasSummary: !!onlyWorksData.summary,
-      hasAiEfficiency: !!onlyWorksData.ai_usage_efficiency
+      hasAiEfficiency: !!onlyWorksData.ai_usage_efficiency,
+      allSections: {
+        summary: !!onlyWorksData.summary,
+        goal_alignment: !!onlyWorksData.goal_alignment,
+        blockers: !!onlyWorksData.blockers,
+        recognition: !!onlyWorksData.recognition,
+        automation_opportunities: !!onlyWorksData.automation_opportunities,
+        communication_quality: !!onlyWorksData.communication_quality,
+        next_steps: !!onlyWorksData.next_steps,
+        ai_usage_efficiency: !!onlyWorksData.ai_usage_efficiency
+      }
     });
 
     return onlyWorksData;
