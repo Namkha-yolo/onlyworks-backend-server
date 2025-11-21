@@ -24,6 +24,18 @@ class OnboardingController {
     if (onboardingData.fieldOfWork) updateData.field_of_work = onboardingData.fieldOfWork;
     if (onboardingData.experienceLevel) updateData.experience_level = onboardingData.experienceLevel;
 
+    // Map Terms of Service acceptance fields
+    if (onboardingData.terms_accepted !== undefined) {
+      updateData.terms_accepted = onboardingData.terms_accepted;
+      updateData.terms_version = onboardingData.terms_version;
+      updateData.terms_accepted_at = onboardingData.timestamp;
+    }
+    if (onboardingData.privacy_accepted !== undefined) {
+      updateData.privacy_accepted = onboardingData.privacy_accepted;
+      updateData.privacy_version = onboardingData.privacy_version;
+      updateData.privacy_accepted_at = onboardingData.timestamp;
+    }
+
     // Mark onboarding as completed
     updateData.onboarding_completed = true;
 
