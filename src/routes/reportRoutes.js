@@ -1,9 +1,11 @@
 const express = require('express');
 const ReportController = require('../controllers/ReportController');
+const EmailController = require('../controllers/EmailController');
 const { authenticateUser } = require('../middleware/auth');
 
 const router = express.Router();
 const reportController = new ReportController();
+const emailController = new EmailController();
 
 // Apply authentication to all report routes
 router.use(authenticateUser);
@@ -38,6 +40,9 @@ router.post('/generate-range', reportController.generateDateRangeReport);
 
 // Generate report from selected sessions (for Reports Page)
 router.post('/generate-from-sessions', reportController.generateFromSessions);
+
+// Share report via email
+router.post('/share-via-email', emailController.shareViaEmail);
 
 // Get report by session ID
 router.get('/session/:sessionId', reportController.getSessionReport);
