@@ -22,6 +22,9 @@ class BatchProcessingService {
     } else {
       logger.warn('Google API key not found - AI analysis disabled');
     }
+
+    // Track session summary generation to prevent duplicates
+    this.sessionSummaryInProgress = new Set();
   }
 
   async triggerBatchProcessing(userId, sessionId, options = {}) {
@@ -566,6 +569,16 @@ Analyze the screenshots and return the JSON response.`;
     try {
       logger.info('Generating session summary', { userId, sessionId });
 
+      // Prevent duplicate session summary generation
+      const sessionKey = `${userId}:${sessionId}`;
+      if (this.sessionSummaryInProgress.has(sessionKey)) {
+        logger.warn('Session summary generation already in progress, skipping duplicate call', { userId, sessionId });
+        return { success: false, error: 'Session summary generation already in progress' };
+      }
+
+      // Mark session as being processed
+      this.sessionSummaryInProgress.add(sessionKey);
+
       // First, check if comprehensive report already exists in reports table
       try {
         logger.info('Checking for existing comprehensive report', { sessionId, userId });
@@ -740,6 +753,9 @@ Analyze the screenshots and return the JSON response.`;
                 ai_usage_efficiency: !!extractedSections.ai_usage_efficiency
               }
             });
+
+            // Clean up tracking before returning existing report
+            this.sessionSummaryInProgress.delete(sessionKey);
             return comprehensiveResult;
           } else {
             logger.warn('Report exists but missing OnlyWorks sections, will regenerate', {
@@ -878,6 +894,11 @@ Analyze the screenshots and return the JSON response.`;
       if (error instanceof ApiError) throw error;
       logger.error('Failed to generate session summary', { error: error.message, userId, sessionId });
       throw new ApiError('INTERNAL_ERROR', { operation: 'generate_session_summary' });
+    } finally {
+      // Always clean up the tracking flag
+      const sessionKey = `${userId}:${sessionId}`;
+      this.sessionSummaryInProgress.delete(sessionKey);
+      logger.info('Session summary generation tracking cleaned up', { userId, sessionId });
     }
   }
 
