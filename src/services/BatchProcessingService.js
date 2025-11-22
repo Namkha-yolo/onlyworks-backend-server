@@ -2,9 +2,12 @@ const WorkSessionRepository = require('../repositories/WorkSessionRepository');
 const ScreenshotRepository = require('../repositories/ScreenshotRepository');
 const BatchReportRepository = require('../repositories/BatchReportRepository');
 const ReportsRepository = require('../repositories/ReportsRepository');
+const SharedReportsRepository = require('../repositories/SharedReportsRepository');
+const ReportStorageService = require('./ReportStorageService');
 const { ApiError } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const pako = require('pako');
 
 class BatchProcessingService {
   constructor() {
@@ -12,6 +15,8 @@ class BatchProcessingService {
     this.screenshotRepo = new ScreenshotRepository();
     this.batchReportRepo = new BatchReportRepository();
     this.reportsRepo = new ReportsRepository();
+    this.sharedReportsRepo = new SharedReportsRepository();
+    this.storageService = new ReportStorageService();
 
     // Initialize Gemini AI
     this.genAI = null;
@@ -1468,26 +1473,53 @@ Analyze the screenshots and return the JSON response.`;
 
   async getSharedReport(shareToken) {
     try {
-      logger.info('Getting shared report', { shareToken });
+      logger.info('Getting shared report from database', { shareToken });
 
-      if (!global.shareCache) {
-        return null;
-      }
+      // Get shared report metadata from database
+      const sharedReport = await this.sharedReportsRepo.getByToken(shareToken);
 
-      const sharedData = global.shareCache.get(shareToken);
-      if (!sharedData) {
+      if (!sharedReport) {
+        logger.info('Shared report not found', { shareToken });
         return null;
       }
 
       // Check if expired
-      const expiresAt = new Date(sharedData.shareSettings.expiresAt);
+      const expiresAt = new Date(sharedReport.expires_at);
       if (expiresAt < new Date()) {
-        global.shareCache.delete(shareToken);
+        logger.info('Shared report expired', { shareToken, expiresAt });
         return null;
       }
 
-      logger.info('Shared report retrieved', { shareToken });
-      return sharedData;
+      // Check if revoked
+      if (sharedReport.is_revoked) {
+        logger.info('Shared report revoked', { shareToken });
+        return null;
+      }
+
+      // Get signed URL for the HTML file
+      const signedUrl = await this.storageService.getSignedUrl(
+        sharedReport.storage_path,
+        604800 // 7 days
+      );
+
+      // Increment view count (non-blocking)
+      this.sharedReportsRepo.incrementViewCount(shareToken).catch(err => {
+        logger.warn('Failed to increment view count', { error: err.message, shareToken });
+      });
+
+      logger.info('Shared report retrieved successfully', {
+        shareToken,
+        storagePath: sharedReport.storage_path
+      });
+
+      return {
+        title: sharedReport.title,
+        htmlUrl: signedUrl,
+        createdAt: sharedReport.created_at,
+        expiresAt: sharedReport.expires_at,
+        viewCount: sharedReport.view_count,
+        metadata: sharedReport.metadata
+      };
     } catch (error) {
       logger.error('Failed to get shared report', { error: error.message, shareToken });
       return null;
@@ -1498,20 +1530,21 @@ Analyze the screenshots and return the JSON response.`;
     try {
       logger.info('Revoking shared report', { shareToken, userId });
 
-      if (!global.shareCache) {
+      // Get shared report to find its ID
+      const sharedReport = await this.sharedReportsRepo.getByToken(shareToken);
+
+      if (!sharedReport) {
+        logger.warn('Shared report not found for revocation', { shareToken });
         return false;
       }
 
-      const sharedData = global.shareCache.get(shareToken);
-      if (!sharedData) {
-        return false;
+      // Revoke the report (checks ownership)
+      const result = await this.sharedReportsRepo.revokeReport(sharedReport.id, userId);
+
+      if (result) {
+        logger.info('Shared report revoked successfully', { shareToken, userId });
       }
 
-      // Check if user owns this share (simple check)
-      // In production, you'd want proper ownership validation
-      global.shareCache.delete(shareToken);
-
-      logger.info('Shared report revoked', { shareToken, userId });
       return true;
     } catch (error) {
       logger.error('Failed to revoke shared report', { error: error.message, shareToken, userId });
