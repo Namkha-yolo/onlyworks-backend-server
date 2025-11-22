@@ -286,6 +286,54 @@ class ReportController {
       }
     });
   });
+
+  // Generate report from selected sessions (NEW - for Reports Page)
+  generateFromSessions = asyncHandler(async (req, res) => {
+    const { userId } = req.user;
+    const { sessionIds, title, developerName } = req.body;
+
+    logger.info('Generating report from selected sessions', {
+      userId,
+      sessionCount: sessionIds ? sessionIds.length : 0
+    });
+
+    // Validate required fields
+    validateRequired({ sessionIds }, ['sessionIds']);
+
+    // Additional validation
+    if (!Array.isArray(sessionIds)) {
+      return res.status(400).json({
+        success: false,
+        error: 'sessionIds must be an array'
+      });
+    }
+
+    if (sessionIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'sessionIds array cannot be empty'
+      });
+    }
+
+    if (sessionIds.length > 50) {
+      return res.status(400).json({
+        success: false,
+        error: 'Maximum 50 sessions allowed per report'
+      });
+    }
+
+    // Generate report with sharing enabled
+    const result = await this.reportService.generateFromSessions(userId, sessionIds, {
+      title,
+      developerName
+    });
+
+    res.json({
+      success: true,
+      data: result,
+      message: 'Report generated and shareable link created successfully'
+    });
+  });
 }
 
 module.exports = ReportController;

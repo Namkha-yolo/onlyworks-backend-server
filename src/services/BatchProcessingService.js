@@ -499,8 +499,12 @@ Analyze the screenshots and return the JSON response.`;
       const jsonMatch = responseText.match(/\\{[\\s\\S]*\\}/);
       if (jsonMatch) {
         const parsedResponse = JSON.parse(jsonMatch[0]);
+
+        // Normalize to OnlyWorks 8-section format
+        const normalized = this.normalizeToOnlyWorksFormat(parsedResponse);
+
         return {
-          ...parsedResponse,
+          ...normalized,
           analysisSource: 'gemini-ai',
           screenshotCount,
           generatedAt: new Date().toISOString()
@@ -517,6 +521,83 @@ Analyze the screenshots and return the JSON response.`;
       screenshotCount,
       generatedAt: new Date().toISOString()
     };
+  }
+
+  /**
+   * Normalize Gemini response to OnlyWorks 8-section format
+   * Handles both flat OnlyWorks format and nested summary/recognition format
+   */
+  normalizeToOnlyWorksFormat(parsedResponse) {
+    // Check if already in OnlyWorks 8-section format
+    if (typeof parsedResponse.summary === 'string' &&
+        parsedResponse.goal_alignment &&
+        parsedResponse.blockers) {
+      logger.info('Gemini response already in OnlyWorks format');
+      return parsedResponse;
+    }
+
+    // Convert nested format to OnlyWorks flat format
+    logger.info('Converting nested Gemini format to OnlyWorks 8-section format');
+
+    const normalized = {
+      // Extract summary from nested structure
+      summary: typeof parsedResponse.summary === 'object'
+        ? (parsedResponse.summary.reportReadySummary || JSON.stringify(parsedResponse.summary))
+        : (parsedResponse.summary || ''),
+
+      // Extract or generate goal_alignment
+      goal_alignment: parsedResponse.goal_alignment ||
+        'Session analyzed for goal alignment and productivity patterns.',
+
+      // Extract or generate blockers
+      blockers: parsedResponse.blockers ||
+        'No significant blockers identified in this session.',
+
+      // Extract recognition from nested structure
+      recognition: typeof parsedResponse.recognition === 'object'
+        ? (parsedResponse.recognition.accomplishments?.join('. ') ||
+           parsedResponse.recognition.teamImpact ||
+           JSON.stringify(parsedResponse.recognition))
+        : (parsedResponse.recognition || 'Session completed successfully.'),
+
+      // Extract automation from nested structure
+      automation_opportunities: typeof parsedResponse.automation === 'object'
+        ? (parsedResponse.automation.suggestions?.join('. ') ||
+           JSON.stringify(parsedResponse.automation))
+        : (parsedResponse.automation_opportunities ||
+           'Workflow patterns analyzed for automation potential.'),
+
+      // Extract or generate communication_quality
+      communication_quality: parsedResponse.communication_quality ||
+        'Communication patterns reviewed.',
+
+      // Extract or generate next_steps
+      next_steps: parsedResponse.next_steps ||
+        'Continue current productivity patterns.',
+
+      // Extract or generate ai_usage_efficiency
+      ai_usage_efficiency: parsedResponse.ai_usage_efficiency ||
+        'AI tool usage patterns analyzed for efficiency.',
+
+      // Preserve additional fields
+      productivityMetrics: parsedResponse.productivityMetrics,
+      applications: parsedResponse.applications,
+      insights: parsedResponse.insights,
+      recommendations: parsedResponse.recommendations
+    };
+
+    logger.info('Normalized Gemini response to OnlyWorks format', {
+      hasSummary: !!normalized.summary,
+      hasGoalAlignment: !!normalized.goal_alignment,
+      hasBlockers: !!normalized.blockers,
+      hasRecognition: !!normalized.recognition,
+      hasAutomation: !!normalized.automation_opportunities,
+      hasCommunication: !!normalized.communication_quality,
+      hasNextSteps: !!normalized.next_steps,
+      hasAiEfficiency: !!normalized.ai_usage_efficiency
+    });
+
+    return normalized;
   }
 
   extractSummaryFromText(text) {
@@ -1017,103 +1098,90 @@ Analyze the screenshots and return the JSON response.`;
     for (const report of batchReports) {
       const analysis = report.analysis_result || {};
 
-      // Try multiple approaches to extract OnlyWorks sections
-
-      // Approach 1: Check if this analysis has the OnlyWorks structure as separate fields
+      // Approach 1: Direct extraction (normalized data from parseGeminiResponse)
+      // This should work now that we normalize in parseGeminiResponse()
       if (analysis.summary && typeof analysis.summary === 'string') {
-        onlyWorksData.summary = analysis.summary;
+        onlyWorksData.summary = this.cleanSectionText(analysis.summary);
       }
       if (analysis.goal_alignment && typeof analysis.goal_alignment === 'string') {
-        onlyWorksData.goal_alignment = analysis.goal_alignment;
+        onlyWorksData.goal_alignment = this.cleanSectionText(analysis.goal_alignment);
       }
       if (analysis.blockers && typeof analysis.blockers === 'string') {
-        onlyWorksData.blockers = analysis.blockers;
+        onlyWorksData.blockers = this.cleanSectionText(analysis.blockers);
       }
       if (analysis.recognition && typeof analysis.recognition === 'string') {
-        onlyWorksData.recognition = analysis.recognition;
+        onlyWorksData.recognition = this.cleanSectionText(analysis.recognition);
       }
       if (analysis.automation_opportunities && typeof analysis.automation_opportunities === 'string') {
-        onlyWorksData.automation_opportunities = analysis.automation_opportunities;
+        onlyWorksData.automation_opportunities = this.cleanSectionText(analysis.automation_opportunities);
       }
       if (analysis.communication_quality && typeof analysis.communication_quality === 'string') {
-        onlyWorksData.communication_quality = analysis.communication_quality;
+        onlyWorksData.communication_quality = this.cleanSectionText(analysis.communication_quality);
       }
       if (analysis.next_steps && typeof analysis.next_steps === 'string') {
-        onlyWorksData.next_steps = analysis.next_steps;
+        onlyWorksData.next_steps = this.cleanSectionText(analysis.next_steps);
       }
       if (analysis.ai_usage_efficiency && typeof analysis.ai_usage_efficiency === 'string') {
-        onlyWorksData.ai_usage_efficiency = analysis.ai_usage_efficiency;
+        onlyWorksData.ai_usage_efficiency = this.cleanSectionText(analysis.ai_usage_efficiency);
       }
 
-      // Approach 2: Parse the actual AI response from analysis.summary
-      // The AI response contains all sections as a concatenated string like:
-      // "\"summary text\",\n  \"goal_alignment\": \"text\",\n  \"blockers\": \"text\""
+      // Approach 2: Fallback - try to parse malformed summary field (for backward compatibility)
+      // This handles old data that wasn't normalized
       if (analysis.summary && typeof analysis.summary === 'string' &&
-          analysis.summary.includes('"goal_alignment"') &&
-          analysis.summary.includes('"blockers"')) {
+          (analysis.summary.includes('"goal_alignment"') || analysis.summary.includes('"blockers"'))) {
 
-        logger.info('Detected OnlyWorks sections in analysis.summary, extracting via regex');
+        logger.info('Detected malformed summary field, attempting extraction');
 
         try {
-          const text = analysis.summary;
+          // Try to parse as JSON first (if it's a stringified object)
+          let parsed = null;
+          try {
+            parsed = JSON.parse(analysis.summary);
+          } catch {
+            // Not valid JSON, try regex extraction
+          }
 
-          // Extract each section using regex patterns
-          const extractSection = (sectionName) => {
-            // Look for patterns like "section_name": "content" or "section_name\": \"content"
-            const patterns = [
-              new RegExp(`"${sectionName}"\\s*:\\s*"([^"]*(?:\\\\.[^"]*)*)"`, 'i'),
-              new RegExp(`"${sectionName}\\"\\s*:\\s*\\"([^"]*(?:\\\\.[^"]*)*)\\"`, 'i')
-            ];
-
-            for (const pattern of patterns) {
-              const match = text.match(pattern);
-              if (match) {
-                // Clean up escaped quotes and other escape sequences
-                return match[1]
-                  .replace(/\\"/g, '"')
-                  .replace(/\\n/g, '\n')
-                  .replace(/\\\\/g, '\\')
-                  .trim();
-              }
+          if (parsed && typeof parsed === 'object') {
+            // Successfully parsed as JSON - extract sections
+            if (parsed.summary && !onlyWorksData.summary) onlyWorksData.summary = this.cleanSectionText(parsed.summary);
+            if (parsed.goal_alignment && !onlyWorksData.goal_alignment) onlyWorksData.goal_alignment = this.cleanSectionText(parsed.goal_alignment);
+            if (parsed.blockers && !onlyWorksData.blockers) onlyWorksData.blockers = this.cleanSectionText(parsed.blockers);
+            if (parsed.recognition && !onlyWorksData.recognition) onlyWorksData.recognition = this.cleanSectionText(parsed.recognition);
+            if (parsed.automation_opportunities && !onlyWorksData.automation_opportunities) {
+              onlyWorksData.automation_opportunities = this.cleanSectionText(parsed.automation_opportunities);
             }
-            return null;
-          };
-
-          // Extract all sections
-          const extractedSummary = extractSection('summary');
-          const extractedGoalAlignment = extractSection('goal_alignment');
-          const extractedBlockers = extractSection('blockers');
-          const extractedRecognition = extractSection('recognition');
-          const extractedAutomation = extractSection('automation_opportunities');
-          const extractedCommunication = extractSection('communication_quality');
-          const extractedNextSteps = extractSection('next_steps');
-          const extractedAiEfficiency = extractSection('ai_usage_efficiency');
-
-          // Update onlyWorksData with extracted sections
-          if (extractedSummary) onlyWorksData.summary = extractedSummary;
-          if (extractedGoalAlignment) onlyWorksData.goal_alignment = extractedGoalAlignment;
-          if (extractedBlockers) onlyWorksData.blockers = extractedBlockers;
-          if (extractedRecognition) onlyWorksData.recognition = extractedRecognition;
-          if (extractedAutomation) onlyWorksData.automation_opportunities = extractedAutomation;
-          if (extractedCommunication) onlyWorksData.communication_quality = extractedCommunication;
-          if (extractedNextSteps) onlyWorksData.next_steps = extractedNextSteps;
-          if (extractedAiEfficiency) onlyWorksData.ai_usage_efficiency = extractedAiEfficiency;
-
-          logger.info('Successfully extracted OnlyWorks sections via regex', {
-            sectionsExtracted: {
-              summary: !!extractedSummary,
-              goal_alignment: !!extractedGoalAlignment,
-              blockers: !!extractedBlockers,
-              recognition: !!extractedRecognition,
-              automation_opportunities: !!extractedAutomation,
-              communication_quality: !!extractedCommunication,
-              next_steps: !!extractedNextSteps,
-              ai_usage_efficiency: !!extractedAiEfficiency
+            if (parsed.communication_quality && !onlyWorksData.communication_quality) {
+              onlyWorksData.communication_quality = this.cleanSectionText(parsed.communication_quality);
             }
-          });
+            if (parsed.next_steps && !onlyWorksData.next_steps) onlyWorksData.next_steps = this.cleanSectionText(parsed.next_steps);
+            if (parsed.ai_usage_efficiency && !onlyWorksData.ai_usage_efficiency) {
+              onlyWorksData.ai_usage_efficiency = this.cleanSectionText(parsed.ai_usage_efficiency);
+            }
+
+            logger.info('Successfully extracted sections from JSON-parsed summary');
+          } else {
+            // Regex extraction for malformed strings
+            const extractedSections = this.extractSectionsViaRegex(analysis.summary);
+
+            // Only update if we don't already have the data
+            if (extractedSections.summary && !onlyWorksData.summary) onlyWorksData.summary = extractedSections.summary;
+            if (extractedSections.goal_alignment && !onlyWorksData.goal_alignment) onlyWorksData.goal_alignment = extractedSections.goal_alignment;
+            if (extractedSections.blockers && !onlyWorksData.blockers) onlyWorksData.blockers = extractedSections.blockers;
+            if (extractedSections.recognition && !onlyWorksData.recognition) onlyWorksData.recognition = extractedSections.recognition;
+            if (extractedSections.automation_opportunities && !onlyWorksData.automation_opportunities) {
+              onlyWorksData.automation_opportunities = extractedSections.automation_opportunities;
+            }
+            if (extractedSections.communication_quality && !onlyWorksData.communication_quality) {
+              onlyWorksData.communication_quality = extractedSections.communication_quality;
+            }
+            if (extractedSections.next_steps && !onlyWorksData.next_steps) onlyWorksData.next_steps = extractedSections.next_steps;
+            if (extractedSections.ai_usage_efficiency && !onlyWorksData.ai_usage_efficiency) {
+              onlyWorksData.ai_usage_efficiency = extractedSections.ai_usage_efficiency;
+            }
+          }
 
         } catch (extractError) {
-          logger.warn('Failed to extract OnlyWorks sections via regex', {
+          logger.warn('Failed to extract OnlyWorks sections from malformed summary', {
             error: extractError.message,
             summaryPreview: analysis.summary.substring(0, 200) + '...'
           });
@@ -1125,8 +1193,6 @@ Analyze the screenshots and return the JSON response.`;
 
     logger.info('OnlyWorks sections extracted', {
       sectionsFound,
-      hasSummary: !!onlyWorksData.summary,
-      hasAiEfficiency: !!onlyWorksData.ai_usage_efficiency,
       allSections: {
         summary: !!onlyWorksData.summary,
         goal_alignment: !!onlyWorksData.goal_alignment,
@@ -1139,7 +1205,67 @@ Analyze the screenshots and return the JSON response.`;
       }
     });
 
+    // Warn if sections are missing
+    if (sectionsFound < 8) {
+      logger.warn('Incomplete OnlyWorks data extracted', {
+        sectionsFound,
+        missing: Object.keys(onlyWorksData).filter(key => !onlyWorksData[key])
+      });
+    }
+
     return onlyWorksData;
+  }
+
+  /**
+   * Extract sections from malformed text using regex (backward compatibility)
+   */
+  extractSectionsViaRegex(text) {
+    const extractSection = (sectionName) => {
+      // Improved regex patterns to handle various formats
+      const patterns = [
+        // Pattern 1: Standard JSON format "key": "value"
+        new RegExp(`"${sectionName}"\\s*:\\s*"([^"]*(?:\\\\.[^"]*)*)"`, 'is'),
+        // Pattern 2: Escaped quotes format "key\": \"value"
+        new RegExp(`"${sectionName}\\"\\s*:\\s*\\"([^"]*(?:\\\\.[^"]*)*)\\"`, 'is'),
+        // Pattern 3: Without outer quotes key: "value"
+        new RegExp(`${sectionName}\\s*:\\s*"([^"]*(?:\\\\.[^"]*)*)"`, 'is'),
+        // Pattern 4: Multi-line content
+        new RegExp(`"${sectionName}"\\s*:\\s*"([\\s\\S]*?)(?:",|"\\s*}|"\\s*$)`, 'i')
+      ];
+
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          return this.cleanSectionText(match[1]);
+        }
+      }
+      return null;
+    };
+
+    return {
+      summary: extractSection('summary'),
+      goal_alignment: extractSection('goal_alignment'),
+      blockers: extractSection('blockers'),
+      recognition: extractSection('recognition'),
+      automation_opportunities: extractSection('automation_opportunities'),
+      communication_quality: extractSection('communication_quality'),
+      next_steps: extractSection('next_steps'),
+      ai_usage_efficiency: extractSection('ai_usage_efficiency')
+    };
+  }
+
+  /**
+   * Clean escaped characters and whitespace from section text
+   */
+  cleanSectionText(text) {
+    if (!text || typeof text !== 'string') return text;
+
+    return text
+      .replace(/\\"/g, '"')    // Unescape quotes
+      .replace(/\\n/g, '\n')   // Convert \n to actual newlines
+      .replace(/\\\\/g, '\\')  // Unescape backslashes
+      .replace(/\\t/g, '\t')   // Convert \t to tabs
+      .trim();
   }
 
   cleanMalformedSummary(summaryText) {

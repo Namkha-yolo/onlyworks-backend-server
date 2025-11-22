@@ -182,6 +182,70 @@ class WorkSessionRepository extends BaseRepository {
     }
   }
 
+  async getSessionsByIds(sessionIds, userId) {
+    try {
+      const { logger } = require('../utils/logger');
+
+      if (!sessionIds || !Array.isArray(sessionIds) || sessionIds.length === 0) {
+        logger.warn('getSessionsByIds called with invalid sessionIds', { sessionIds, userId });
+        return [];
+      }
+
+      logger.info('Fetching sessions by IDs', {
+        userId,
+        sessionCount: sessionIds.length,
+        tableName: this.tableName
+      });
+
+      // Use admin client to bypass RLS
+      const client = this.supabaseAdmin || this.supabase;
+      if (!client) {
+        throw new Error('No Supabase client available');
+      }
+
+      const { data, error } = await client
+        .from(this.tableName)
+        .select('*')
+        .in('id', sessionIds)
+        .eq('user_id', userId); // Security: Only return sessions owned by this user
+
+      if (error) {
+        logger.error('Error fetching sessions by IDs', {
+          error: error.message,
+          code: error.code,
+          userId,
+          sessionCount: sessionIds.length
+        });
+        throw error;
+      }
+
+      // Log warning if some sessions were not found
+      if (data && data.length < sessionIds.length) {
+        logger.warn('Some sessions not found or not owned by user', {
+          requested: sessionIds.length,
+          found: data.length,
+          userId
+        });
+      }
+
+      logger.info('Sessions fetched successfully', {
+        userId,
+        requestedCount: sessionIds.length,
+        foundCount: data ? data.length : 0
+      });
+
+      return data || [];
+    } catch (error) {
+      const { logger } = require('../utils/logger');
+      logger.error('Exception in getSessionsByIds', {
+        error: error.message,
+        userId,
+        sessionIdsCount: sessionIds ? sessionIds.length : 0
+      });
+      throw error;
+    }
+  }
+
   async getSessionStats(userId, dateFrom, dateTo) {
     try {
       let query = this.supabaseAdmin

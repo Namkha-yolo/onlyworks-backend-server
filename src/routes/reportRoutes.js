@@ -36,6 +36,9 @@ router.get('/session/:sessionId', reportController.getSessionReport);
 // Date range report generation
 router.post('/generate-range', reportController.generateDateRangeReport);
 
+// Generate report from selected sessions (for Reports Page)
+router.post('/generate-from-sessions', reportController.generateFromSessions);
+
 // Get report by session ID
 router.get('/session/:sessionId', reportController.getSessionReport);
 router.get('/session/:sessionId/download', reportController.getSessionReport);
