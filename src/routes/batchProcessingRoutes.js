@@ -5,7 +5,11 @@ const { authenticateUser } = require('../middleware/auth');
 const router = express.Router();
 const batchController = new BatchProcessingController();
 
-// Apply authentication to all routes
+// PUBLIC ROUTES (no authentication required) - must be defined BEFORE authenticateUser middleware
+// Get shared report by token (public access)
+router.get('/shared/:shareToken', batchController.getSharedReport);
+
+// Apply authentication to remaining routes
 router.use(authenticateUser);
 
 // Trigger batch processing for session screenshots
@@ -22,12 +26,6 @@ router.get('/summary/:sessionId', batchController.generateSessionSummary);
 
 // Create shareable report
 router.post('/share/:sessionId', batchController.createShareableReport);
-
-// Get shared report by token (no authentication required)
-router.get('/shared/:shareToken', (req, res, next) => {
-  // Skip authentication for shared reports
-  next();
-}, batchController.getSharedReport);
 
 // Revoke shared report
 router.delete('/share/:shareToken', batchController.revokeSharedReport);
