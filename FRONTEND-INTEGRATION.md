@@ -25,14 +25,14 @@ The report sharing feature allows users to generate shareable OnlyWorks reports 
   "success": true,
   "data": {
     "success": true,
-    "id": "58a55219-14ea-4426-911c-a60a47c08fa1",
-    "reportId": "58a55219-14ea-4426-911c-a60a47c08fa1",
+    "id": "58a55219-14ea-4426-911c-a60a47c08fa1",           // Same as reportId (backward compatibility)
+    "reportId": "58a55219-14ea-4426-911c-a60a47c08fa1",     // Use this for clarity
     "shareToken": "139a32a4-3790-46e9-ad94-3bdf066048db",
     "shareUrl": "https://only-works.com/r/139a32a4-3790-46e9-ad94-3bdf066048db",
     "expiresAt": "2025-12-22T02:48:22.882Z",
     "title": "My Weekly Report",
 
-    // OnlyWorks 8 Sections
+    // OnlyWorks 8 Sections (ALL sections always present, never null)
     "summary": "Comprehensive report generated from 2 work sessions...",
     "goal_alignment": "Sessions analyzed for goal alignment...",
     "blockers": "Analysis of productivity blockers...",
@@ -40,11 +40,11 @@ The report sharing feature allows users to generate shareable OnlyWorks reports 
     "automation_opportunities": "Identified opportunities for workflow automation...",
     "communication_quality": "Communication effectiveness analyzed...",
     "next_steps": "Continue maintaining consistent work patterns...",
-    "ai_usage_efficiency": "AI tools usage and efficiency metrics...",
+    "ai_usage_efficiency": "AI tools usage and efficiency metrics...",  // May be generic if no AI data
 
-    // Metrics
-    "productivity_score": 85.5,            // Can be null
-    "focus_score": 92.3,                   // Can be null
+    // Metrics (0-100 scale, NOT 0-1! Display as-is without multiplying by 100)
+    "productivity_score": 85.5,            // 0-100 scale (85.5 = 85.5%), can be null
+    "focus_score": 92.3,                   // 0-100 scale (92.3 = 92.3%), can be null
     "session_duration_minutes": 240,
     "screenshot_count": 120,
     "session_count": 2,
